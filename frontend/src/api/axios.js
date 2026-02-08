@@ -1,0 +1,19 @@
+import axios from "axios";
+import toast from "react-hot-toast";
+
+const api = axios.create({
+  baseURL: "http://192.168.0.196:4000/api",
+  withCredentials: true,
+});
+
+// هذا "الرادار" يصيد أي خطأ يرجع من السيرفر
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const message = error.response?.data?.msg || "اكو مشكلة بالسيرفر 🛑";
+    toast.error(message); // يطلع التنبيه تلقائياً
+    return Promise.reject(error);
+  },
+);
+
+export default api;

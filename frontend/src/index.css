@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --font-cairo: "Cairo", sans-serif;
+  /* 🟡 ألوان كروة الأساسية */
+  --color-primary: #FACC15;
+  --color-primary-dark: #EAB308;
+
+  /* 🌑 ألوان الخلفية الداكنة */
+  --color-dark-bg: #0F172A;
+  --color-dark-card: #1E293B;
+
+  /* ⚪ الألوان الثانوية */
+  --color-secondary: #94A3B8;
+}
+
+@layer base {
+  html, body {
+    font-family: var(--font-cairo) !important;
+  }
+}
+
+.custom-height {
+  height: calc(100vh - 77px);
+}

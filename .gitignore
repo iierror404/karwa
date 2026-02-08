@@ -1,0 +1,30 @@
+# Dependencies 📦
+node_modules/
+frontend/node_modules/
+frontend/package-lock.json
+backend/node_modules/
+backend/package-lock.json
+
+# Production 🏗️
+dist/
+dist-ssr/
+build/
+
+# Environment Variables (أهم شي ذني حتى لا ينسرق التوكن مالتك) 🔑
+.env
+*.env.local
+.env.*.local
+
+# Debug logs 🪵
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor folders 💻
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
