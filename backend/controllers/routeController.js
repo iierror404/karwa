@@ -1,4 +1,6 @@
+import { getIO } from "../config/socket.js";
 import Route from "../models/Route.js";
+import { ROUTE_STATUS, USER_ROLES } from "../utils/constants.js";
 
 /**
  * @desc    إضافة خط جديد (خاص بالسائق)
@@ -101,7 +103,7 @@ export const searchRouteController = async (req, res) => {
  */
 export const getMyRoutesController = async (req, res) => {
   try {
-    if (req.user.role !== "driver")
+    if (req.user.role !== USER_ROLES.DRIVER)
       return res.status(400).json({
         success: false,
         msg: "غير مصرح لك بالدخول ❗",
@@ -110,5 +112,53 @@ export const getMyRoutesController = async (req, res) => {
     res.json(routes);
   } catch (error) {
     res.status(500).json({ msg: "فشل جلب خطوطك! ❌" });
+  }
+};
+
+/**
+ * @desc    تحديث حالة الخط (نشط، مفول، متوقف)
+ * @route   PUT /api/routes/updateRouteStatus
+ */
+export const updateRouteStatus = async (req, res) => {
+  try {
+    const { routeId, newStatus, noteMessage, isAvailable } = req.body;
+
+    // 1. التحديث لازم يستهدف الحقول داخل routeStatus 🎯
+    const updatedRoute = await Route.findByIdAndUpdate(
+      routeId,
+      {
+        $set: {
+          "routeStatus.status": newStatus,
+          "routeStatus.noteMessage": noteMessage || "",
+          "routeStatus.isDriverAvailable": isAvailable !== undefined ? isAvailable : true
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedRoute) {
+      return res.status(404).json({ message: "الخط غير موجود! ❌" });
+    }
+
+    // 2. إرسال التحديث بالـ Socket ⚡
+    const io = getIO();
+    io.emit("route_status_updated", { 
+      routeId: updatedRoute._id, 
+      newStatus: updatedRoute.routeStatus.status,
+      noteMessage: updatedRoute.routeStatus.noteMessage,
+      isDriverAvailable: updatedRoute.routeStatus.isDriverAvailable
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "تم تحديث حالة الخط بنجاح! ✅",
+      updatedRoute,
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: "صار خلل بتحديث الحالة 🤦‍♂️", 
+      error: error.message 
+    });
   }
 };

@@ -3,6 +3,8 @@ import express from "express";
 import ConnectToDb from "./config/db.js";
 import cors from "cors";
 import fileUpload from "express-fileupload";
+import http from "http";
+import { initSocket } from "./config/socket.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
@@ -45,6 +47,11 @@ app.use(
   }),
 );
 
+const server = http.createServer(app);
+const io = initSocket(server);
+
+app.set("socketio", io);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 
@@ -52,10 +59,10 @@ app.use("/api/routes", routesRoute);
 
 app.use("/api/bookings", bookingRoutes);
 
-app.use("/api/user", userRoutes)
+app.use("/api/user", userRoutes);
 
 // * Server Init
 ConnectToDb();
-app.listen(port, host, () => {
-  console.log(`🟢 Server is running on: http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`🟢 Socket Server is running on: http://localhost:${port}`);
 });

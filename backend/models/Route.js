@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ROUTE_STATUS } from "../utils/constants.js";
 
 const routeSchema = new mongoose.Schema(
   {
@@ -51,11 +52,22 @@ const routeSchema = new mongoose.Schema(
     },
     carNumber: {
       type: String,
-      required: true
+      required: true,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
+    routeStatus: {
+      status: {
+        type: String,
+        enum: Object.values(ROUTE_STATUS),
+        default: ROUTE_STATUS.ACTIVE,
+      },
+      noteMessage: { // رسالة من السائق (عطلان, مريض...)
+        type: String,
+        default: ""
+      },
+      isDriverAvilable: {
+        type: Boolean,
+        default: true
+      }
     },
   },
   { timestamps: true },

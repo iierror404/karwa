@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { BOOKING_STATUS } from "../utils/constants.js";
 
 const bookingSchema = new mongoose.Schema(
   {
@@ -19,7 +20,7 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enm: ["pending", "accepted", "rejected"],
+      enm: Object.values(BOOKING_STATUS),
       default: "pending",
     },
     bookingDate: {
