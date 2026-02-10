@@ -22,6 +22,35 @@ export const protectMidleware = async (req, res, next) => {
         return res.status(401).json({ msg: "اليوزر ما موجود بالنظام! 🕵️‍♂️" });
       }
 
+      // 4. التحقق من حالة الحساب 🛡️
+      const { accountStatus, role } = req.user;
+
+      if (accountStatus === "banned") {
+        return res.status(403).json({
+          msg: "حسابك محظور من قبل الإدارة! 🚫",
+          status: "banned",
+          message:
+            req.user.message || "يرجى التواصل مع الإدارة للمزيد من التفاصيل",
+        });
+      }
+
+      if (accountStatus === "rejected") {
+        return res.status(403).json({
+          msg: "تم رفض طلب انضمامك للنظام ❌",
+          status: "rejected",
+          message:
+            req.user.message || "يرجى مراجعة بياناتك والتواصل مع الإدارة",
+        });
+      }
+
+      // للسائقين: يجب أن يكون الحساب APPROVED للوصول للمسارات المحمية
+      if (role === "driver" && accountStatus === "pending") {
+        return res.status(403).json({
+          msg: "حسابك قيد المراجعة حالياً ⏳",
+          status: "pending",
+        });
+      }
+
       next();
     } catch (error) {
       console.error("Cookie Token Error ❌:", error.message);

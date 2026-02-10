@@ -6,6 +6,7 @@ export const AppProvider = ({ children }) => {
   const [mySubscribers, setMySubscribers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeChat, setActiveChat] = useState(null); // { routeId, chatType, otherParticipantId }
 
   // تحديث قائمة المشتركين للسائق
   const updateSubscribers = (data) => {
@@ -20,6 +21,8 @@ export const AppProvider = ({ children }) => {
         updateSubscribers,
         sidebarOpen,
         setSidebarOpen,
+        activeChat,
+        setActiveChat,
       }}
     >
       {children}

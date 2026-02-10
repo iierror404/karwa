@@ -1,27 +1,41 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, X, User, Clock, AlertTriangle } from "lucide-react";
+import {
+  Bell,
+  Check,
+  X,
+  User,
+  Clock,
+  AlertTriangle,
+  Ticket,
+} from "lucide-react";
 import api from "../api/axios";
 import { toast } from "react-hot-toast";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
+import { CHAT_TYPES, getAvatarUrl } from "../constants/constants";
 
 const DriverNotifications = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [bookingNotifications, setBookingNotifications] = useState([]);
 
   const { socket } = useSocket();
   const { user } = useAuth();
+  const {
+    notifications: otherNotifications,
+    unreadCount: otherUnreadCount,
+    markAllAsRead,
+  } = useNotification();
+
+  const userId = user?.id || user?._id;
 
   // جلب الطلبات المعلقة (Pending) عند التحميل
   const fetchPendingBookings = async () => {
+    if (!userId) return;
     try {
       const res = await api.get("/bookings/driver");
-      // نفلتر بس الطلبات المعلقة
       const pending = res.data.bookings.filter((b) => b.status === "pending");
-      setNotifications(pending);
-      setUnreadCount(pending.length);
-      console.log("Pending Bookings: ", res.data);
+      setBookingNotifications(pending);
     } catch (err) {
       console.error("خطأ بجلب الإشعارات", err);
     }
@@ -29,22 +43,19 @@ const DriverNotifications = () => {
 
   useEffect(() => {
     fetchPendingBookings();
-  }, []);
+  }, [userId]);
 
-  // 🔌 الاستماع للسوكيت - Socket.io Listener
   useEffect(() => {
-    if (!socket || !user) return;
+    if (!socket || !userId) return;
 
-    const eventName = `new_booking_notification_${user._id}`;
+    const eventName = `new_booking_notification_${userId}`;
 
-    // الاستماع لحدث طلب الحجز الجديد
     const handleNewBooking = (data) => {
-      console.log("🔔 إشعار جديد من السوكيت:", data);
-
-      // تشغيل صوت تنبيه خفيف (اختياري)
-      const audio = new Audio("/notification.mp3");
+      console.log("🔔 New Booking Received:", data);
+      const audio = new Audio("/sounds/notification_sound.mp3");
       audio.play().catch((e) => console.log("Audio play failed"));
 
+      toast.dismiss();
       toast(data.msg, {
         icon: "🎟️",
         style: {
@@ -55,47 +66,45 @@ const DriverNotifications = () => {
         },
       });
 
-      // نضيف الطلب الجديد للقائمة فوراً بدون ريفريش
-      setNotifications((prev) => [data.booking, ...prev]);
-      setUnreadCount((prev) => prev + 1);
+      setBookingNotifications((prev) => [data.booking, ...prev]);
     };
 
     socket.on(eventName, handleNewBooking);
-
-    // تنظيف المستمع عند الخروج
-    return () => {
-      socket.off(eventName, handleNewBooking);
-    };
-  }, [socket, user]);
+    return () => socket.off(eventName, handleNewBooking);
+  }, [socket, userId]);
 
   const handleAction = async (id, status) => {
     try {
+      toast.dismiss();
       const res = await api.patch(`/bookings/status/${id}`, { status });
-
       if (status === "accepted") {
         toast.success(res.data.msg);
       } else {
         toast.error("تم رفض الطلب");
       }
-
-      // نحذف الإشعار من القائمة بعد المعالجة
-      setNotifications((prev) => prev.filter((n) => n._id !== id));
-      setUnreadCount((prev) => (prev > 0 ? prev - 1 : 0));
+      setBookingNotifications((prev) => prev.filter((n) => n._id !== id));
     } catch (err) {
       toast.error("فشلت العملية! 🔥");
     }
   };
 
+  const totalUnread = bookingNotifications.length + otherUnreadCount;
+
   return (
     <div className="relative font-cairo" dir="rtl">
       {/* أيقونة الجرس */}
       <div
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (!isOpen) markAllAsRead();
+        }}
         className="bg-[#1E293B] p-3 rounded-2xl border border-gray-700 relative cursor-pointer hover:border-[#FACC15] transition-all"
       >
         <Bell size={24} className="text-[#FACC15]" />
-        {unreadCount > 0 && (
-          <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-[#1E293B] animate-pulse"></span>
+        {totalUnread > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-[#1E293B] animate-pulse">
+            {totalUnread > 9 ? "+9" : totalUnread}
+          </span>
         )}
       </div>
 
@@ -109,74 +118,114 @@ const DriverNotifications = () => {
 
           <div className="absolute left-0 mt-3 w-80 md:w-96 bg-[#1E293B] border border-gray-700 rounded-[1.5rem] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-[#1E293B]">
-              <h3 className="font-black text-sm text-white">
-                إشعارات الحجز والطلبات 📩
+              <h3 className="font-black text-sm text-white flex items-center gap-2">
+                مركز التنبيهات <Bell size={16} className="text-[#FACC15]" />
               </h3>
-              <span className="text-[10px] bg-[#FACC15]/10 text-[#FACC15] px-2 py-1 rounded-lg">
-                {unreadCount} قيد الانتظار
-              </span>
+              {totalUnread > 0 && (
+                <span className="text-[10px] bg-[#FACC15]/10 text-[#FACC15] px-2 py-1 rounded-lg">
+                  {bookingNotifications.length} حجز • {otherUnreadCount} رسائل
+                </span>
+              )}
             </div>
 
             <div className="max-h-[400px] overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 text-sm">
-                  <Clock className="mx-auto mb-2 opacity-20" size={32} />
-                  لا توجد طلبات حجز جديدة حالياً..
+              {bookingNotifications.length === 0 &&
+              otherNotifications.length === 0 ? (
+                <div className="p-12 text-center text-gray-500 text-sm">
+                  <Clock className="mx-auto mb-3 opacity-20" size={40} />
+                  لا توجد إشعارات جديدة حالياً..
                 </div>
               ) : (
-                notifications.map((notif) => (
-                  <div
-                    key={notif._id}
-                    className="p-4 border-b border-gray-800/50 hover:bg-[#0F172A]/40 transition-all group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 ${
-                          notif.type === "absence"
-                            ? "bg-gradient-to-br from-red-500 to-red-800 text-white shadow-lg shadow-red-900/20"
-                            : "bg-gradient-to-br from-[#FACC15] to-orange-500 text-[#0F172A]"
-                        }`}
-                      >
-                        {notif.type === "absence" ? (
-                          <AlertTriangle size={20} />
-                        ) : (
-                          <User size={20} />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white truncate">
-                          طلب من: {notif.passengerId?.fullName || "راكب"}
-                        </p>
-                        <p className="text-[10px] text-gray-500 mb-2">
-                          المسار: {notif.routeId?.fromArea} ⬅️{" "}
-                          {notif.routeId?.toArea}
-                        </p>
-
-                        {/* أزرار سريعة */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAction(notif._id, "accepted")}
-                            className="flex-1 bg-green-600 hover:bg-green-500 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors flex items-center justify-center gap-1"
-                          >
-                            <Check size={14} /> قبول
-                          </button>
-                          <button
-                            onClick={() => handleAction(notif._id, "rejected")}
-                            className="flex-1 bg-red-600/10 hover:bg-red-600/20 text-red-500 py-1.5 rounded-lg text-[11px] font-bold border border-red-500/20 transition-colors flex items-center justify-center gap-1"
-                          >
-                            <X size={14} /> رفض
-                          </button>
+                <>
+                  {/* طلبات الحجز */}
+                  {bookingNotifications.map((notif) => (
+                    <div
+                      key={notif._id}
+                      className="p-4 border-b border-gray-800/50 hover:bg-[#0F172A]/40 transition-all"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FACC15] to-orange-500 flex items-center justify-center text-[#0F172A] shrink-0 shadow-lg shadow-orange-900/20">
+                          <Ticket size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="text-sm font-bold text-white truncate">
+                              حجز جديد: {notif.passengerId?.fullName}
+                            </p>
+                            <span className="text-[9px] text-gray-500 italic">
+                              الآن
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-400 mb-3 truncate">
+                            من {notif.routeId?.fromArea} إلى{" "}
+                            {notif.routeId?.toArea}
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() =>
+                                handleAction(notif._id, "accepted")
+                              }
+                              className="flex-1 bg-green-600 hover:bg-green-500 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all flex items-center justify-center gap-1 shadow-md shadow-green-900/20"
+                            >
+                              <Check size={14} /> قبول
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleAction(notif._id, "rejected")
+                              }
+                              className="flex-1 bg-red-600/10 hover:bg-red-600/20 text-red-500 py-1.5 rounded-lg text-[11px] font-bold border border-red-500/20 transition-all"
+                            >
+                              رفض
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+
+                  {/* رسائل الدردشة */}
+                  {otherNotifications.map((notif, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 border-b border-gray-800/50 hover:bg-[#0F172A]/40 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-800 shrink-0 border border-gray-700">
+                          <img
+                            src={
+                              notif.senderImage ||
+                              getAvatarUrl(notif.senderName || "User")
+                            }
+                            className="w-full h-full object-cover"
+                            alt=""
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="text-sm font-bold text-white truncate">
+                              {notif.senderName || "رسالة جديدة"}
+                            </p>
+                            <span className="text-[9px] text-gray-500">
+                              {notif.chatType === "group" ? "مجموعة" : "خاص"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 truncate line-clamp-1">
+                            {notif.title || notif.body}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
 
             <div className="p-3 text-center bg-[#0F172A]/30">
-              <button className="text-[11px] text-[#94A3B8] hover:text-[#FACC15] transition-colors">
-                عرض جميع الحجوزات 🔎
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-[11px] text-[#94A3B8] hover:text-[#FACC15] transition-colors font-medium"
+              >
+                إغلاق القائمة
               </button>
             </div>
           </div>

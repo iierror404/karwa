@@ -10,7 +10,7 @@ const SocketContext = createContext();
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const { user } = useAuth(); // حتى نعرف منو اللي اتصل
+  const { user, setUser } = useAuth(); // حتى نعرف منو اللي اتصل و نحدث حالته
 
   useEffect(() => {
     if (!user?.id) return;
@@ -40,8 +40,11 @@ export const SocketProvider = ({ children }) => {
       });
 
       // 🟢 متابعة حالة المستخدمين
-      // ملاحظة: هذا الحل بسيط، الأفضل جلب القائمة الكاملة عند البدء ثم التحديث
-      // أو استخدام React Query للحالة المعقدة.
+      newSocket.on("online_users_list", (users) => {
+        console.log("👥 Initial Online Users:", users);
+        setOnlineUsers(users);
+      });
+
       newSocket.on("user_status_change", ({ userId, status }) => {
         setOnlineUsers((prev) => {
           const newSet = new Set(prev);
@@ -53,9 +56,23 @@ export const SocketProvider = ({ children }) => {
 
       setSocket(newSocket);
 
+      // 🔔 استلام تحديث حالة الحساب لحظياً (Real-time Status Update)
+      newSocket.on("account_status_updated", (data) => {
+        const { status, message } = data;
+        const updatedUser = {
+          ...user,
+          status,
+          message: message || user.message,
+        };
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        console.log("⚠️ تم تحديث حالة الحساب لحظياً:", status);
+      });
+
       // التنظيف عند الخروج
       return () => {
         newSocket.off("user_status_change");
+        newSocket.off("account_status_updated"); // 👈 تنظيف الحدث الجديد
         newSocket.disconnect();
       };
     } else {

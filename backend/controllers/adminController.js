@@ -1,20 +1,15 @@
 import User from "../models/User.js";
 import Route from "../models/Route.js";
+import { HTTP_STATUS } from "../utils/constants.js";
+import { getIO } from "../config/socket.js";
 
 /**
  * @desc    جلب قائمة السواق اللي مستمسكاتهم قيد المراجعة
  * @route   GET /api/admin/pending-drivers
  */
 export const getPendingDriversController = async (req, res) => {
-  try {
-    const driver = await User.find({
-      role: "driver",
-      accountStatus: "pending",
-    });
-    res.json(driver);
-  } catch (error) {
-    res.status(500).json({ msg: "خطأ في جلب البيانات! ❌" });
-  }
+  // تم دمج الوظيفة مع getPendingDrivers بالأسفل لتقليل التكرار ✅
+  return getPendingDrivers(req, res);
 };
 
 /**
@@ -35,6 +30,13 @@ export const verifyDriverController = async (req, res) => {
     );
 
     if (!driver) return res.status(404).json({ msg: "السائق غير موجود! 🔍" });
+
+    // ⚡ تنبيه السائق بتغيير حالته لحظياً (Real-time Status Update)
+    const io = getIO();
+    io.to(`user_${req.params.id}`).emit("account_status_updated", {
+      status: status,
+      message: status === "accepted" ? "تم قبولك من قبل الأدارة ✅" : rejMsg,
+    });
 
     res.json({ msg: `تم تحديث حالة الحساب إلى: ${status} ✅`, driver });
   } catch (error) {
@@ -82,13 +84,20 @@ export const getAdminStats = async (req, res) => {
  */
 export const toggleUserStatus = async (req, res) => {
   try {
-    const {status} = req.body;
+    const { status } = req.body;
     const user = await User.findById(req.params.id);
     if (!user)
       return res.status(404).json({ message: "المستخدم غير موجود! 🔍" });
 
     user.accountStatus = status; // يعكس الحالة الحالية
     await user.save();
+
+    // ⚡ تنبيه المستخدم بتغيير حالته لحظياً
+    const io = getIO();
+    io.to(`user_${user._id}`).emit("account_status_updated", {
+      status: user.accountStatus,
+      message: user.message,
+    });
 
     res.status(200).json({
       success: true,
@@ -133,12 +142,32 @@ export const getPendingDrivers = async (req, res) => {
   try {
     const pendingDrivers = await User.find({
       role: "driver",
-      isVerified: false,
-      "documents.nationalCardFront": { $ne: "" }, // تأكد إنهم رافعين مستمسكات فعلاً
+      accountStatus: "pending",
     }).sort({ createdAt: 1 });
 
     res.status(200).json({ success: true, drivers: pendingDrivers });
   } catch (error) {
     res.status(500).json({ message: "خطأ في جلب طلبات السواق ❌" });
   }
+};
+
+/**
+ * @desc حذف حساب مستخدم من قبل الادارة
+ * @route DELETE /api/admin/delete/:id
+ */
+export const deleteAccount = async (req, res) => {
+  const { id } = req.params;
+
+  const user = await User.findByIdAndDelete(id);
+
+  if (!user)
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      message: "هذا المستخدم غير موجود.",
+    });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "تم حذف الحساب من النظام بنجاح.",
+  });
 };

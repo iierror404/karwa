@@ -1,5 +1,5 @@
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // استدعاء الهوك مالتنا
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext"; // استدعاء الهوك مالتنا
 
 const ProtectedRoute = ({ children, roleRequired }) => {
   const { user, loading } = useAuth(); // سحب البيانات من الكونتيكست
@@ -18,7 +18,14 @@ const ProtectedRoute = ({ children, roleRequired }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // 3️⃣ 🛑 إذا اليوزر موجود بس الـ Role مالته ميسوي Match
+  // 3️⃣ 🛡️ التحقق من حالة الحساب (محظور/مرفوض/قيد الانتظار للسايق)
+  if (user.status !== "approved") {
+    // نسمح له فقط بالوصول لراوت الحساب الشخصي (إذا احتاج يشوف ليش انرفض) أو صفحة الحظر
+    // بما إن الـ Route هنا يغلف المكونات، حنحول الكل لـ /banned
+    return <Navigate to="/banned" replace />;
+  }
+
+  // 4️⃣ 🛑 إذا اليوزر موجود بس الـ Role مالته ميسوي Match
   // مثلاً: راكب يحاول يدخل لصفحة السايق
   if (roleRequired && user?.role !== roleRequired) {
     console.log("Access Denied 🚫: Role mismatch");

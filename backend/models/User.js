@@ -60,6 +60,15 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // 🔔 إعدادات كتم الإشعارات
+    muteNotificationsUntil: {
+      type: Date,
+      default: null,
+    },
+    isMutedPermanently: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );

@@ -10,6 +10,7 @@ import {
   Users,
   Ticket,
   MessageSquare,
+  VolumeX,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
@@ -17,11 +18,13 @@ import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext"; // استدعاء السوكيت 🔌
 import { useEffect, useState } from "react";
 import { USER_ROLES } from "../constants/constants";
+import { toast } from "react-hot-toast";
+import api from "../api/axios";
 
 const Sidebar = () => {
   const location = useLocation();
   const { sidebarOpen, setSidebarOpen } = useAppContext();
-  const { logout, user } = useAuth();
+  const { logout, user, updateUser } = useAuth();
   const { socket } = useSocket(); // استخدام السوكيت للتعامل مع التنبيهات
   const [notification, setNotification] = useState(false); // حالة النقطة الحمراء 🔴
 
@@ -179,7 +182,8 @@ const Sidebar = () => {
                   notification &&
                   ((user?.role === USER_ROLES.PASSENGER &&
                     item.id === "my_subscriptions") ||
-                    (user?.role === USER_ROLES.DRIVER && item.id === "dashboard"));
+                    (user?.role === USER_ROLES.DRIVER &&
+                      item.id === "dashboard"));
 
                 return (
                   <Link
@@ -212,21 +216,79 @@ const Sidebar = () => {
                   </Link>
                 );
               })}
+
+            {/* إعدادات الإشعارات وسحب الخروج (للراكب) ⚙️ */}
+            {user?.role === USER_ROLES.PASSENGER && (
+              <div className="pt-2 space-y-2">
+                <div className="px-4 py-3 bg-[#0F172A]/50 rounded-2xl border border-gray-800">
+                  <div className="flex items-center gap-3 text-white mb-3">
+                    <VolumeX size={18} className="text-[#FACC15]" />
+                    <span className="text-xs font-bold">كتم التنبيهات</span>
+                  </div>
+                  <select
+                    className="w-full bg-[#1E293B] text-[11px] text-gray-300 border border-gray-700 rounded-xl p-2 outline-none focus:border-[#FACC15]/50 transition-all mb-4"
+                    value={
+                      user?.isMutedPermanently
+                        ? "permanent"
+                        : user?.muteNotificationsUntil &&
+                            new Date(user.muteNotificationsUntil) > new Date()
+                          ? "muted"
+                          : 0
+                    }
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      try {
+                        const res = await api.post("/user/mute-notifications", {
+                          duration: val === "permanent" ? val : parseInt(val),
+                        });
+                        updateUser(res.data.user); // مزامنة الحالة مع السيرفر 🔄
+                        toast.dismiss();
+                        toast.success(res.data.msg);
+                      } catch (err) {
+                        toast.error("فشل تحديث الإعدادات");
+                      }
+                    }}
+                  >
+                    <option value={0}>🔔 تشغيل التنبيهات</option>
+                    <option value="muted" hidden>
+                      🔕 كتم مؤقت نشط
+                    </option>
+                    <option value={30}>🔕 كتم لـ 30 دقيقة</option>
+                    <option value={60}>🔕 كتم لساعة واحدة</option>
+                    <option value={480}>🔕 كتم لـ 8 ساعات</option>
+                    <option value="permanent">🔕 كتم للأبد</option>
+                  </select>
+
+                  <button
+                    onClick={() => {
+                      logout();
+                      setSidebarOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-red-400 bg-red-500/5 hover:bg-red-500/10 transition-all border border-red-500/10 hover:border-red-500/20 text-xs"
+                  >
+                    <LogOut size={16} />
+                    <span>تسجيل الخروج</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* زر تسجيل الخروج 💣 */}
-          <div className="pt-4 border-t border-gray-800 cursor-pointer">
-            <button
-              onClick={() => {
-                logout();
-                setSidebarOpen(false);
-              }}
-              className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
-            >
-              <LogOut size={20} />
-              <span>تسجيل الخروج</span>
-            </button>
-          </div>
+          {/* زر تسجيل الخروج العام (لغير الراكب) 💣 */}
+          {user?.role !== USER_ROLES.PASSENGER && (
+            <div className="pt-4 border-t border-gray-800 cursor-pointer">
+              <button
+                onClick={() => {
+                  logout();
+                  setSidebarOpen(false);
+                }}
+                className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+              >
+                <LogOut size={20} />
+                <span>تسجيل الخروج</span>
+              </button>
+            </div>
+          )}
         </nav>
       </aside>
     </div>

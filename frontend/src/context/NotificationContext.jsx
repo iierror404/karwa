@@ -2,14 +2,15 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { useSocket } from "./SocketContext";
 import { useAuth } from "./AuthContext";
 import api from "../api/axios";
+import { useAppContext } from "./AppContext";
 
 const NotificationContext = createContext();
-
-export const useNotifications = () => useContext(NotificationContext);
+export const useNotification = () => useContext(NotificationContext);
 
 export const NotificationProvider = ({ children }) => {
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { activeChat } = useAppContext();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -18,8 +19,23 @@ export const NotificationProvider = ({ children }) => {
 
   useEffect(() => {
     if (!socket || !user) return;
+    console.log("notifications: ", notifications);
 
     const handleNewMessage = (data) => {
+      // 🕵️ التحقق من الدردشة النشطة
+      if (activeChat) {
+        const isSameRoute = data.routeId === activeChat.routeId;
+        const isSameType = data.chatType === activeChat.chatType;
+        let isSamePerson = true;
+        if (data.chatType === "private" && activeChat.otherParticipantId) {
+          isSamePerson = data.senderId === activeChat.otherParticipantId;
+        }
+
+        if (isSameRoute && isSameType && isSamePerson) {
+          return; // تجاهل التحديث للعداد والاشعارات
+        }
+      }
+
       console.log("🔔 New Message Notification:", data);
 
       // اضافة الاشعار للقائمة
@@ -27,7 +43,7 @@ export const NotificationProvider = ({ children }) => {
       setUnreadCount((prev) => prev + 1);
 
       // تشغيل صوت اشعار
-      new Audio("/sounds/notification.mp3").play().catch(() => {});
+      new Audio("/sounds/notification_sound.mp3").play().catch(() => {});
     };
 
     const handleBookingUpdate = (data) => {

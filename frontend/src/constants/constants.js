@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     CONVERSATIONS: "/chat/conversations",
     MY_CONVERSATIONS: "/chat/my-conversations",
     HISTORY: (routeId) => `/chat/history/${routeId}`,
+    MARK_AS_READ: (routeId) => `/chat/mark-read/${routeId}`,
   },
 };
 

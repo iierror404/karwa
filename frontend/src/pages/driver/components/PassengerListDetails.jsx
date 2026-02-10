@@ -6,13 +6,40 @@ import {
   CheckCircle,
   XCircle,
   MessageCircle,
+  Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../../../api/axios";
+import { toast } from "react-hot-toast";
+import ConfirmModal from "../../../components/ConfirmModal";
 
-const PassengerListDetails = ({ routeId, allBookings }) => {
+const PassengerListDetails = ({ routeId, allBookings, refreshData }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
   const navigate = useNavigate();
+
+  const handleExpel = (bookingId, passengerName) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "استبعاد راكب 🚫",
+      message: `هل أنت متأكد من استبعاد الراكب ${passengerName} من الخط؟ هذا الإجراء سيقوم بإلغاء اشتراكه فوراً.`,
+      onConfirm: async () => {
+        try {
+          await api.post("/bookings/expel", { bookingId });
+          toast.success(`تم استبعاد الراكب ${passengerName} بنجاح ✅`);
+          if (refreshData) refreshData();
+        } catch (err) {
+          toast.error("فشل استبعاد الراكب ❌");
+        }
+      },
+    });
+  };
 
   // 1. فلترة الركاب مع التأكد من وجود البيانات
   const passengers = useMemo(() => {
@@ -127,18 +154,32 @@ const PassengerListDetails = ({ routeId, allBookings }) => {
                       )}
                     </div>
 
-                    {/* زر الشات الخاص مع الراكب */}
-                    <button
-                      onClick={() =>
-                        navigate(
-                          `/chat/${routeId}?type=private&passengerId=${booking.passengerId._id}`,
-                        )
-                      }
-                      className="ml-auto bg-[#FACC15]/10 hover:bg-[#FACC15] text-[#FACC15] hover:text-black p-2 rounded-xl transition-all border border-[#FACC15]/20"
-                      title="مراسلة الراكب"
-                    >
-                      <MessageCircle size={16} />
-                    </button>
+                    {/* أزرار الإجراءات (شات + طرد) */}
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          navigate(
+                            `/chat/${routeId}?type=private&passengerId=${booking.passengerId._id}`,
+                          )
+                        }
+                        className="bg-[#FACC15]/10 hover:bg-[#FACC15] text-[#FACC15] hover:text-black p-2 rounded-xl transition-all border border-[#FACC15]/20"
+                        title="مراسلة الراكب"
+                      >
+                        <MessageCircle size={16} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleExpel(
+                            booking._id,
+                            booking.passengerId?.fullName,
+                          )
+                        }
+                        className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-xl transition-all border border-red-500/20"
+                        title="طرد من الخط"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
 
                     <div className="flex items-center gap-1 text-[#94A3B8] mb-2">
                       <Phone size={10} />
@@ -181,6 +222,14 @@ const PassengerListDetails = ({ routeId, allBookings }) => {
           لا يوجد ركاب في هذا الخط حالياً 🧊
         </div>
       )}
+      {/* نافذة التأكيد المخصصة ✨ */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+      />
     </div>
   );
 };

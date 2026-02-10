@@ -1,6 +1,7 @@
 import { getIO } from "../config/socket.js";
 import Booking from "../models/Booking.js";
 import Route from "../models/Route.js";
+import Message from "../models/Message.js";
 
 /**
  * @desc    إرسال طلب حجز (من الراكب) + تنبيه السائق
@@ -38,10 +39,28 @@ export const requestBookingController = async (req, res) => {
 
     // ⚡ تنبيه السايق: نرسل الإشعار لغرفة السايق الخاصة
     const io = getIO();
-    io.emit(`new_booking_notification_${route.driverId}`, {
-      msg: `وصلك طلب حجز جديد من ${req.user.fullName} 🎫`,
-      booking: populatedBooking,
-    });
+    const driver = await User.findById(route.driverId).select(
+      "muteNotificationsUntil isMutedPermanently",
+    );
+
+    const now = new Date();
+    const isMuted =
+      driver?.isMutedPermanently ||
+      (driver?.muteNotificationsUntil && driver.muteNotificationsUntil > now);
+
+    if (!isMuted) {
+      io.to(`user_${route.driverId}`).emit(
+        `new_booking_notification_${route.driverId}`,
+        {
+          msg: `وصلك طلب حجز جديد من ${req.user.fullName} 🎫`,
+          booking: populatedBooking,
+        },
+      );
+    } else {
+      console.log(
+        `🔕 Notification suppressed for muted driver: ${route.driverId}`,
+      );
+    }
 
     res.status(201).json({ success: true, booking: populatedBooking });
     console.log(
@@ -148,5 +167,203 @@ export const getPassengerBookingsController = async (req, res) => {
   } catch (error) {
     console.log("Error in getPassengerBookings: ", error);
     res.status(500).json({ msg: "فشل في جلب حجوزاتك! 🔥" });
+  }
+};
+
+/**
+ * @desc    إبلاغ السائق بالغياب (أني باجر معطل)
+ * @route   POST /api/bookings/report-absence
+ */
+export const reportAbsenceController = async (req, res) => {
+  try {
+    const { driverId, routeId } = req.body;
+    const senderId = req.user.id;
+
+    if (!routeId) {
+      return res.status(400).json({ msg: "معرف الخط مطلوب" });
+    }
+
+    // 1. إنشاء رسالة في قاعدة البيانات
+    const content = "اني باجر معطل، لا تمر عليه ✋";
+    const newMessage = new Message({
+      route: routeId,
+      sender: senderId,
+      content,
+      chatType: "group",
+    });
+
+    await newMessage.save();
+
+    const populatedMessage = await newMessage.populate(
+      "sender",
+      "fullName profileImg",
+    );
+
+    const io = getIO();
+
+    // 2. إرسال الرسالة لغرفة الخط (للي فاتح الشات حالياً)
+    console.log(`📤 Emitting new_message to room: route_${routeId}`);
+    io.to(`route_${routeId}`).emit("new_message", populatedMessage);
+
+    // 3. 🔔 إشعار السائق والركاب المشتركين
+    const route = await Route.findById(routeId).select(
+      "fromArea toArea driverId",
+    );
+
+    if (route) {
+      const routeName = `${route.fromArea} ⬅ ${route.toArea}`;
+
+      // جلب معرفات الركاب المشتركين
+      const acceptedBookings = await Booking.find({
+        routeId,
+        status: "accepted",
+      }).select("passengerId");
+
+      const passengerIds = acceptedBookings.map((b) =>
+        b.passengerId.toString(),
+      );
+      const driverIdStr = route.driverId.toString();
+
+      // قائمة المستلمين (السائق + الركاب) ما عدا المرسل
+      const allParticipants = [driverIdStr, ...passengerIds];
+      const notificationRecipients = allParticipants.filter(
+        (id) => id !== senderId.toString(),
+      );
+
+      console.log(
+        `🔔 Sending absence notifications to ${notificationRecipients.length} recipients`,
+      );
+
+      for (const recipientId of notificationRecipients) {
+        const recipient = await User.findById(recipientId).select(
+          "muteNotificationsUntil isMutedPermanently",
+        );
+        const now = new Date();
+        const isMuted =
+          recipient?.isMutedPermanently ||
+          (recipient?.muteNotificationsUntil &&
+            recipient.muteNotificationsUntil > now);
+
+        if (!isMuted) {
+          io.to(`user_${recipientId}`).emit("message_notification", {
+            title: `بلاغ غياب: ${req.user.fullName}`,
+            body: content,
+            routeId,
+            chatType: "group",
+            senderId: senderId,
+            senderName: req.user.fullName,
+            senderImage: req.user.profileImg,
+            routeName,
+            type: "message",
+          });
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      msg: "تم إبلاغ الجميع بنجاح ✅",
+    });
+
+    console.log(
+      `🚫 الراكب ${req.user.fullName} أبلغ عن غيابه في خط: ${routeId}`,
+    );
+  } catch (error) {
+    console.error("Report Absence Error:", error);
+    res.status(500).json({ msg: "فشل في إرسال البلاغ" });
+  }
+};
+
+/**
+ * @desc    إلغاء حجز (من قبل الراكب)
+ * @route   POST /api/bookings/cancel
+ */
+export const cancelBookingController = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) return res.status(404).json({ msg: "الحجز غير موجود! 🔍" });
+
+    // التأكد إن الحجز يخص هذا الراكب
+    if (booking.passengerId.toString() !== req.user.id) {
+      return res.status(403).json({ msg: "غير مسموح لك بإلغاء هذا الحجز! ✋" });
+    }
+
+    const prevStatus = booking.status;
+    booking.status = "cancelled";
+    await booking.save();
+
+    // إذا كان الحجز مقبولاً، نعيد المقعد المتاح للخط
+    if (prevStatus === "accepted") {
+      const route = await Route.findById(booking.routeId);
+      if (route) {
+        route.avilableSeats += 1;
+        await route.save();
+      }
+    }
+
+    // تنبيه السائق
+    const io = getIO();
+    io.to(`user_${booking.driverId}`).emit(`booking_updated_for_driver`, {
+      bookingId: booking._id,
+      status: "cancelled",
+      msg: `قام ${req.user.fullName} بإلغاء حجزه ❌`,
+    });
+
+    res.json({ success: true, msg: "تم إلغاء الحجز بنجاح ✅" });
+  } catch (error) {
+    console.error("Cancel Booking Error:", error);
+    res.status(500).json({ msg: "فشل إلغاء الحجز! 🔥" });
+  }
+};
+
+/**
+ * @desc    طرد راكب من الخط (من قبل السائق)
+ * @route   POST /api/bookings/expel
+ */
+export const expelPassengerController = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+    const booking = await Booking.findById(bookingId).populate(
+      "passengerId",
+      "fullName",
+    );
+
+    if (!booking) return res.status(404).json({ msg: "الحجز غير موجود! 🔍" });
+
+    // التأكد إن اللي جاي يحدث هو السايق صاحب الخط
+    if (booking.driverId.toString() !== req.user.id) {
+      return res.status(403).json({ msg: "غير مسموح لك بطرد هذا الراكب! ✋" });
+    }
+
+    const prevStatus = booking.status;
+    booking.status = "expelled";
+    await booking.save();
+
+    // إذا كان الحجز مقبولاً، نعيد المقعد المتاح للخط
+    if (prevStatus === "accepted") {
+      const route = await Route.findById(booking.routeId);
+      if (route) {
+        route.avilableSeats += 1;
+        await route.save();
+      }
+    }
+
+    // تنبيه الراكب
+    const io = getIO();
+    io.to(`user_${booking.passengerId._id}`).emit(
+      `booking_status_updated_${booking.passengerId._id}`,
+      {
+        bookingId: booking._id,
+        status: "expelled",
+        msg: "تم استبعادك من الخط من قبل السائق! 🚫",
+      },
+    );
+
+    res.json({ success: true, msg: "تم طرد الراكب بنجاح ✅" });
+  } catch (error) {
+    console.error("Expel Passenger Error:", error);
+    res.status(500).json({ msg: "فشل استبعاد الراكب! 🔥" });
   }
 };

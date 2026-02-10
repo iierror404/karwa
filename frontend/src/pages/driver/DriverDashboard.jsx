@@ -14,10 +14,12 @@ import {
   AlertTriangle,
   LogOutIcon,
   MessageCircle,
+  Trash2,
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
 import AddRouteModal from "../../components/AddRouteModal";
+import ConfirmModal from "../../components/ConfirmModal";
 import PassengerListDetails from "./components/PassengerListDetails";
 import Sidebar from "./components/Sidebar";
 import { useNavigate } from "react-router-dom";
@@ -27,18 +29,26 @@ import { useRoutes } from "../../context/RouteContext";
 import DriverBookings from "./components/DriverBookings";
 import ManageRoute from "./components/ManageRoute";
 import DriverNotifications from "../../components/DriverNotifications";
+import { useSocket } from "../../context/SocketContext";
+import { SOCKET_EVENTS, ACCOUNT_STATUS } from "../../constants/constants";
 
 const DriverDashboard = () => {
   // 1. استخدام الكونتيكست بدل الـ Local States 🔄
-  const { user, logout } = useAuth(); // لجلب بيانات السائق (الاسم، الصورة، الـ ID)
+  const { user, logout, updateUser } = useAuth(); // لجلب بيانات السائق (الاسم، الصورة، الـ ID)
   const { routes, setRoutes } = useRoutes(); // لجلب وإدارة الخطوط
   const { setSidebarOpen } = useAppContext(); // لإدارة حالة السايدبار العامة
+  const { onlineUsers } = useSocket(); // 🟢 سحبنا قائمة المتصلين
 
   // 2. الـ States الخاصة بالداشبورد فقط 📊
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [acceptedBookings, setAcceptedBookings] = useState([]);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
 
   const navigate = useNavigate();
 
@@ -72,7 +82,7 @@ const DriverDashboard = () => {
   const fetchConversations = async () => {
     try {
       const res = await api.get("/chat/conversations");
-      console.log("Conversations: \n", res.data)
+      console.log("Conversations: \n", res.data);
       setConversations(res.data.data);
     } catch (err) {
       console.error("Failed to fetch conversations", err);
@@ -104,6 +114,91 @@ const DriverDashboard = () => {
     const interval = setInterval(fetchAcceptedBookings, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const { socket } = useSocket();
+
+  // 🔔 استلام التحديثات الفورية لصندوق الرسائل في داشبورد السائق
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessageNotification = (notif) => {
+      if (notif.type !== "message") return;
+
+      setConversations((prev) => {
+        const existingIdx = prev.findIndex(
+          (c) =>
+            c.route._id === notif.routeId &&
+            c.otherPerson._id === notif.senderId,
+        );
+
+        if (existingIdx !== -1) {
+          // تحديث محادثة موجودة
+          const updated = [...prev];
+          const conv = updated[existingIdx];
+
+          updated[existingIdx] = {
+            ...conv,
+            lastMessage: {
+              ...conv.lastMessage,
+              content: notif.body,
+              createdAt: new Date().toISOString(),
+              sender: notif.senderId,
+            },
+            unreadCount: (conv.unreadCount || 0) + 1,
+          };
+
+          // نقل المحادثة للأعلى
+          const item = updated.splice(existingIdx, 1)[0];
+          updated.unshift(item);
+          return updated;
+        } else {
+          // محادثة جديدة، نعيد الجلب من السيرفر
+          fetchConversations();
+          return prev;
+        }
+      });
+    };
+
+    const handleAbsenceNotification = (data) => {
+      toast.error(data.msg, {
+        icon: "🚶‍♂️🚫",
+        duration: 6000,
+        style: {
+          background: "#1E293B",
+          color: "#fff",
+          border: "1px solid #f97316",
+        },
+      });
+    };
+
+    socket.on("message_notification", handleMessageNotification);
+    socket.on("absence_notification", handleAbsenceNotification);
+
+    return () => {
+      socket.off("message_notification", handleMessageNotification);
+      socket.off("absence_notification", handleAbsenceNotification);
+    };
+  }, [socket]);
+
+  const handleDeleteConversation = (e, conv) => {
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: "حذف المحادثة 🗑️",
+      message: "هل أنت متأكد من حذف هذه المحادثة؟ ستُحذف جميع الرسائل نهائياً.",
+      onConfirm: async () => {
+        try {
+          await api.delete(
+            `/chat/conversation/${conv.route._id}?otherUserId=${conv.otherPerson._id}`,
+          );
+          toast.success("تم حذف المحادثة بنجاح ✅");
+          fetchConversations();
+        } catch (err) {
+          toast.error("فشل حذف المحادثة ❌");
+        }
+      },
+    });
+  };
 
   return (
     <div
@@ -387,9 +482,10 @@ const DriverDashboard = () => {
               )
               .map((route) => (
                 <PassengerListDetails
-                  key={route._id} // ضيف الـ key ضروري جداً بالـ React 🔑
+                  key={route._id}
                   routeId={route._id}
                   allBookings={acceptedBookings}
+                  refreshData={fetchAcceptedBookings}
                 />
               ))
           ) : (
@@ -447,6 +543,56 @@ const DriverDashboard = () => {
 
             <hr className="border-gray-800 my-6" />
 
+            {/* إعدادات الإشعارات (للسائق) 🔔 */}
+            <div className="p-4 bg-[#0F172A]/50 rounded-2xl border border-gray-800">
+              <div className="flex items-center gap-3 text-white mb-4">
+                <div className="bg-[#FACC15]/10 p-2 rounded-xl">
+                  <MessageCircle size={18} className="text-[#FACC15]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold">تنبيهات النظام</p>
+                  <p className="text-[10px] text-gray-500">
+                    كتم إشعارات الحجز والرسائل الجديدة
+                  </p>
+                </div>
+              </div>
+              <select
+                className="w-full bg-[#1E293B] text-xs text-gray-300 border border-gray-700 rounded-xl p-3 outline-none focus:border-[#FACC15]/50 transition-all cursor-pointer"
+                value={
+                  user?.isMutedPermanently
+                    ? "permanent"
+                    : user?.muteNotificationsUntil &&
+                        new Date(user.muteNotificationsUntil) > new Date()
+                      ? "muted"
+                      : 0
+                }
+                onChange={async (e) => {
+                  const val = e.target.value;
+                  try {
+                    const res = await api.post("/user/mute-notifications", {
+                      duration: val === "permanent" ? val : parseInt(val),
+                    });
+                    updateUser(res.data.user); // تحديث الحالة فوراً 🔄
+                    toast.dismiss();
+                    toast.success(res.data.msg);
+                  } catch (err) {
+                    toast.error("فشل تحديث الإعدادات");
+                  }
+                }}
+              >
+                <option value={0}>🔔 تشغيل التنبيهات (افتراضي)</option>
+                <option value="muted" hidden>
+                  🔕 كتم مؤقت نشط
+                </option>
+                <option value={30}>🔕 كتم لـ 30 دقيقة</option>
+                <option value={60}>🔕 كتم لساعة واحدة</option>
+                <option value={480}>🔕 كتم لـ 8 ساعات</option>
+                <option value="permanent">🔕 كتم للأبد</option>
+              </select>
+            </div>
+
+            <hr className="border-gray-800 my-6" />
+
             {/* زر تسجيل الخروج 🚪 */}
             <button
               onClick={() => {
@@ -497,49 +643,78 @@ const DriverDashboard = () => {
 
           <div className="space-y-3">
             {conversations.length > 0 ? (
-              conversations.map((conv, idx) => (
-                <div
-                  key={idx}
-                  onClick={() =>
-                    navigate(
-                      `/chat/${conv._id.route}?type=private&passengerId=${conv._id.otherPerson}`,
-                    )
-                  }
-                  className="bg-[#0F172A]/50 p-4 rounded-2xl border border-gray-800 hover:border-[#FACC15]/30 cursor-pointer transition-all hover:bg-[#0F172A]"
-                >
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={
-                        conv.otherPerson?.profileImg ||
-                        `https://ui-avatars.com/api/?name=${conv.otherPerson?.fullName}&background=FACC15&color=000`
-                      }
-                      className="w-12 h-12 rounded-full object-cover border border-gray-700"
-                      alt="passenger"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1">
-                        <h4 className="font-bold text-white text-sm">
-                          {conv.otherPerson?.fullName}
-                        </h4>
-                        <span className="text-[10px] text-gray-500">
-                          {new Date(
-                            conv.lastMessage.createdAt,
-                          ).toLocaleDateString("en-GB")}
-                        </span>
+              conversations.map((conv, idx) => {
+                const hasUnread = conv.unreadCount > 0;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() =>
+                      navigate(
+                        `/chat/${conv.route._id}?type=private&passengerId=${conv.otherPerson._id}`,
+                      )
+                    }
+                    className={`p-4 rounded-2xl border ${
+                      hasUnread
+                        ? "bg-[#1E293B] border-[#FACC15] shadow-[#FACC15]/5"
+                        : "bg-[#0F172A]/50 border-gray-800"
+                    } hover:border-[#FACC15]/30 cursor-pointer transition-all hover:bg-[#0F172A] relative`}
+                  >
+                    {hasUnread && (
+                      <div className="absolute -top-2 -right-2 bg-[#FACC15] text-black w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shadow-lg z-10 animate-bounce">
+                        {conv.unreadCount}
                       </div>
-                      <p className="text-gray-400 text-xs truncate dir-rtl text-right">
-                        {conv.lastMessage.sender === user._id ? "أنت: " : ""}
-                        {conv.lastMessage.content}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2 text-[10px] text-[#FACC15]">
-                        <div className="bg-[#FACC15]/10 px-2 py-0.5 rounded-md">
-                          خط: {conv.route.fromArea} ⬅ {conv.route.toArea}
+                    )}
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <img
+                          src={
+                            conv.otherPerson?.profileImg ||
+                            `https://ui-avatars.com/api/?name=${conv.otherPerson?.fullName}&background=FACC15&color=000`
+                          }
+                          className="w-12 h-12 rounded-full object-cover border border-gray-700"
+                          alt="passenger"
+                        />
+                        {(onlineUsers.includes(conv.otherPerson?._id) ||
+                          onlineUsers.includes(conv.otherPerson?.id)) && (
+                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#1E293B] rounded-full"></span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <h4
+                            className={`font-bold text-sm ${hasUnread ? "text-[#FACC15]" : "text-white"}`}
+                          >
+                            {conv.otherPerson?.fullName}
+                          </h4>
+                          <span className="text-[10px] text-gray-500">
+                            {new Date(
+                              conv.lastMessage.createdAt,
+                            ).toLocaleDateString("en-GB")}
+                          </span>
+                        </div>
+                        <p
+                          className={`text-xs truncate dir-rtl text-right ${hasUnread ? "text-white font-bold" : "text-gray-400"}`}
+                        >
+                          {conv.lastMessage.sender === user._id ? "أنت: " : ""}
+                          {conv.lastMessage.content}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="bg-[#FACC15]/10 px-2 py-0.5 rounded-md text-[10px] text-[#FACC15]">
+                            خط: {conv.route.fromArea} ⬅ {conv.route.toArea}
+                          </div>
+                          <button
+                            onClick={(e) => handleDeleteConversation(e, conv)}
+                            className="p-1.5 hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-lg transition-colors"
+                            title="حذف المحادثة"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-10 text-gray-500">
                 <MessageCircle size={40} className="mx-auto mb-2 opacity-20" />
@@ -555,6 +730,15 @@ const DriverDashboard = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         refreshRoutes={refreshRoutes}
+      />
+
+      {/* نافذة التأكيد المخصصة ✨ */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
       />
     </div>
   );

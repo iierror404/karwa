@@ -1,6 +1,7 @@
 import Message from "../models/Message.js";
 import Route from "../models/Route.js";
 import Booking from "../models/Booking.js";
+import User from "../models/User.js";
 import { getIO } from "../config/socket.js";
 import { CHAT_MESSAGE_TYPES } from "../utils/constants.js";
 
@@ -40,6 +41,62 @@ export const sendMessage = async (req, res) => {
     if (chatType === "group") {
       // شات القروب: الكل يسمع
       io.to(`route_${routeId}`).emit("new_message", populatedMessage);
+
+      // 🔔 إرسال إشعارات لكل المشتركين في الخط
+      try {
+        const route = await Route.findById(routeId).select(
+          "driverId fromArea toArea",
+        );
+        if (route) {
+          const routeName = `${route.fromArea} ⬅ ${route.toArea}`;
+
+          // جلب كل الركاب المقبولين في هذا الخط
+          const acceptedBookings = await Booking.find({
+            routeId,
+            status: "accepted",
+          }).select("passengerId");
+
+          const passengerIds = acceptedBookings.map((b) =>
+            b.passengerId.toString(),
+          );
+          const driverId = route.driverId.toString();
+
+          // قائمة كل المستلمين المحتملين (سائق + ركاب)
+          const allParticipants = [driverId, ...passengerIds];
+
+          // فلترة المرسل من قائمة الحاصلين على الإشعار
+          const notificationRecipients = allParticipants.filter(
+            (id) => id !== senderId.toString(),
+          );
+
+          for (const recipientId of notificationRecipients) {
+            const recipient = await User.findById(recipientId).select(
+              "muteNotificationsUntil isMutedPermanently",
+            );
+            const now = new Date();
+            const isMuted =
+              recipient?.isMutedPermanently ||
+              (recipient?.muteNotificationsUntil &&
+                recipient.muteNotificationsUntil > now);
+
+            if (!isMuted) {
+              io.to(`user_${recipientId}`).emit("message_notification", {
+                title: `رسالة جماعية في خط: ${routeName}`,
+                body: `${req.user.fullName}: ${content}`,
+                routeId,
+                chatType: "group",
+                senderId: senderId,
+                senderName: req.user.fullName,
+                senderImage: req.user.profileImg,
+                routeName,
+                type: "message",
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error sending group notifications:", err);
+      }
     } else {
       // شات خاص (تفاوض)
 
@@ -84,17 +141,28 @@ export const sendMessage = async (req, res) => {
             : "";
         }
 
-        io.to(`user_${receiverId}`).emit("message_notification", {
-          title: `رسالة جديدة من ${req.user.fullName}`,
-          body: content,
-          routeId,
-          chatType,
-          senderId: senderId,
-          senderName: req.user.fullName,
-          senderImage: req.user.profileImg,
-          routeName,
-          type: "message",
-        });
+        const recipient = await User.findById(receiverId).select(
+          "muteNotificationsUntil isMutedPermanently",
+        );
+        const now = new Date();
+        const isMuted =
+          recipient?.isMutedPermanently ||
+          (recipient?.muteNotificationsUntil &&
+            recipient.muteNotificationsUntil > now);
+
+        if (!isMuted) {
+          io.to(`user_${receiverId}`).emit("message_notification", {
+            title: `رسالة جديدة من ${req.user.fullName}`,
+            body: content,
+            routeId,
+            chatType,
+            senderId: senderId,
+            senderName: req.user.fullName,
+            senderImage: req.user.profileImg,
+            routeName,
+            type: "message",
+          });
+        }
       }
     }
 
@@ -113,10 +181,7 @@ export const getDriverConversations = async (req, res) => {
   try {
     const driverId = req.user._id;
 
-    // ... (الكود السابق نفسه) ...
-
     const conversations = await Message.aggregate([
-      // ... (نفس الـ aggregation)
       {
         $match: {
           chatType: "private",
@@ -137,6 +202,21 @@ export const getDriverConversations = async (req, res) => {
             route: "$route",
           },
           lastMessage: { $first: "$$ROOT" },
+          // حساب عدد الرسائل غير المقروءة (المستلم هو السائق الحالي)
+          unreadCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$receiver", driverId] },
+                    { $eq: ["$isRead", false] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
       {
@@ -160,8 +240,11 @@ export const getDriverConversations = async (req, res) => {
           otherPerson: { $arrayElemAt: ["$otherPersonDetails", 0] },
           route: { $arrayElemAt: ["$routeDetails", 0] },
           lastMessage: 1,
+          unreadCount: 1,
         },
       },
+      // ترتيب المحادثات: الأحدث أولاً
+      { $sort: { "lastMessage.createdAt": -1 } },
     ]);
 
     res.status(200).json({ success: true, data: conversations });
@@ -200,6 +283,21 @@ export const getPassengerConversations = async (req, res) => {
             route: "$route",
           },
           lastMessage: { $first: "$$ROOT" },
+          // حساب عدد الرسائل غير المقروءة (المستلم هو الراكب الحالي)
+          unreadCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$receiver", passengerId] },
+                    { $eq: ["$isRead", false] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
       {
@@ -223,8 +321,11 @@ export const getPassengerConversations = async (req, res) => {
           otherPerson: { $arrayElemAt: ["$otherPersonDetails", 0] },
           route: { $arrayElemAt: ["$routeDetails", 0] },
           lastMessage: 1,
+          unreadCount: 1,
         },
       },
+      // ترتيب المحادثات: الأحدث أولاً
+      { $sort: { "lastMessage.createdAt": -1 } },
     ]);
     res.status(200).json({ success: true, data: conversations });
   } catch (error) {
@@ -268,5 +369,78 @@ export const getChatHistory = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "فشل جلب الرسايل 📉" });
+  }
+};
+
+/**
+ * @desc تحديث الرسائل كمقروءة عند فتح المحادثة
+ * @route PUT /api/chat/mark-read/:routeId
+ */
+export const markMessagesAsRead = async (req, res) => {
+  try {
+    const { routeId } = req.params;
+    const { otherUserId } = req.query;
+    const currentUserId = req.user._id;
+
+    // تحديث جميع الرسائل غير المقروءة في هذه المحادثة
+    // (الرسائل التي أنا المستلم فيها)
+    const updateQuery = {
+      route: routeId,
+      receiver: currentUserId,
+      isRead: false,
+    };
+
+    // إذا كان هناك طرف ثاني محدد (شات خاص)
+    if (otherUserId) {
+      updateQuery.sender = otherUserId;
+    }
+
+    const result = await Message.updateMany(updateQuery, { isRead: true });
+
+    res.status(200).json({
+      success: true,
+      message: "تم تحديث حالة الرسائل بنجاح",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "فشل تحديث حالة الرسائل" });
+  }
+};
+
+/**
+ * @desc حذف المحادثة (من جهة واحدة أو حذف نهائي)
+ * @route DELETE /api/chat/conversation/:routeId
+ */
+export const deleteConversationController = async (req, res) => {
+  try {
+    const { routeId } = req.params;
+    const { otherUserId } = req.query;
+    const currentUserId = req.user._id;
+
+    if (!otherUserId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "معرف الطرف الآخر مطلوب" });
+    }
+
+    // حذف كافة الرسائل الخاصة بين الطرفين في هذا الخط
+    const result = await Message.deleteMany({
+      route: routeId,
+      chatType: "private",
+      $or: [
+        { sender: currentUserId, receiver: otherUserId },
+        { sender: otherUserId, receiver: currentUserId },
+      ],
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "تم حذف المحادثة بنجاح",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Delete Conversation Error:", error);
+    res.status(500).json({ success: false, message: "فشل حذف المحادثة" });
   }
 };

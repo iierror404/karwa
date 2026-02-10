@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(true);
 
-useEffect(() => {
+  useEffect(() => {
     const initAuth = async () => {
       // إذا ماكو يوزر بالكاش، نكدر نكتفي بالتحميل
       if (!user) {
@@ -30,10 +30,21 @@ useEffect(() => {
         }
       } catch (error) {
         console.error("Auth check failed ❌:", error.response?.data?.msg);
-        
-        // إذا الكوكي انمسحت أو انتهت (401 أو 403)
-        if (error.response?.status === 401 || error.response?.status === 403) {
+
+        // إذا الكوكي انمسحت أو انتهت (401)
+        if (error.response?.status === 401) {
           logout(); // نمسح الكاش ونرجع للـ login
+        }
+
+        // إذا الحساب محظور (403)، نحدث الحالة من السيرفر إذا وصلت
+        if (error.response?.status === 403 && error.response.data?.status) {
+          const restrictedUser = {
+            ...user,
+            status: error.response.data.status,
+            message: error.response.data.message,
+          };
+          setUser(restrictedUser);
+          localStorage.setItem("user", JSON.stringify(restrictedUser));
         }
       } finally {
         setLoading(false);
@@ -48,6 +59,13 @@ useEffect(() => {
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
     // الـ Role والتوكن صاروا بأمان (واحد بالـ User object والثاني بالكوكي)
+  };
+
+  // 🔥 دالة لتحديث بيانات المستخدم (للحفاظ على المزامنة مع الـ LocalStorage)
+  const updateUser = (newData) => {
+    const updatedUser = { ...user, ...newData };
+    setUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
   };
 
   // 🔥 دالة إنشاء حساب جديد (Register)
@@ -83,7 +101,7 @@ useEffect(() => {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, register, logout, loading, setUser }}
+      value={{ user, login, register, logout, loading, setUser, updateUser }}
     >
       {!loading && children}
     </AuthContext.Provider>

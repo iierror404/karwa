@@ -1,18 +1,28 @@
 import { Link } from "react-router-dom";
 import karwaLogo from "../assets/karwa-logo-glow.png";
 import { useAuth } from "../context/AuthContext";
-import { LogIn, Menu, X, Bell } from "lucide-react";
+import { LogIn, Menu, X, Bell, BellOff } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
 import Sidebar from "./Sidebar";
-import { useNotifications } from "../context/NotificationContext";
-import { useState } from "react";
+import { useNotification } from "../context/NotificationContext";
+import { useState, useMemo } from "react";
 import { USER_ROLES } from "../constants/constants";
 
 const Navbar = () => {
   const { setSidebarOpen, sidebarOpen } = useAppContext();
   const { user } = useAuth();
-  const { unreadCount, notifications, markAllAsRead } = useNotifications();
+  const { unreadCount, notifications, markAllAsRead } = useNotification();
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // 🔕 التحقق من حالة كتم الإشعارات
+  const isMuted = useMemo(() => {
+    if (!user) return false;
+    if (user.isMutedPermanently) return true;
+    if (user.muteNotificationsUntil) {
+      return new Date(user.muteNotificationsUntil) > new Date();
+    }
+    return false;
+  }, [user]);
 
   // تنسيق عنوان الاشعار بناءً على المرسل
   const getNotificationTitle = (notif) => {
@@ -78,9 +88,9 @@ const Navbar = () => {
                     setShowNotifications(!showNotifications);
                     if (!showNotifications && unreadCount > 0) markAllAsRead();
                   }}
-                  className="p-2 bg-[#0F172A] text-gray-400 hover:text-white rounded-xl border border-gray-700 transition-all relative"
+                  className={`p-2 bg-[#0F172A] ${isMuted ? "text-red-400" : "text-gray-400"} hover:text-white rounded-xl border border-gray-700 transition-all relative`}
                 >
-                  <Bell size={20} />
+                  {isMuted ? <BellOff size={20} /> : <Bell size={20} />}
                   {unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -95,7 +105,7 @@ const Navbar = () => {
                 {showNotifications && (
                   <div
                     dir="rtl"
-                    className="absolute top-12 -left-69 w-80 bg-[#1E293B] border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-[60]"
+                    className="fixed inset-x-4 top-20 md:absolute md:top-12 md:left-auto md:right-0 md:inset-x-auto md:w-80 bg-[#1E293B] border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-[60]"
                   >
                     <div className="p-3 border-b border-gray-700 flex justify-between items-center bg-[#0F172A]">
                       <h4 className="font-bold text-sm text-white">
@@ -152,22 +162,26 @@ const Navbar = () => {
                 )}
               </div>
 
-              <Link
-                to={user.role === USER_ROLES.DRIVER ? "/driver/dashboard" : "/search"}
-              >
-                <div className="flex items-center gap-2 bg-[#0F172A] py-1 px-2.5 rounded-full border border-gray-700 hover:border-[#FACC15] transition-all group">
-                  <span className="text-sm font-bold text-gray-300 group-hover:text-white">
+              <Link to="/account/me">
+                <div className="flex items-center gap-2 bg-[#0F172A] py-1 px-1.5 md:px-2.5 rounded-full border border-gray-700 hover:border-[#FACC15] transition-all group">
+                  <span className="text-sm font-bold text-gray-300 group-hover:text-white hidden md:block">
                     {user.fullName.split(" ")[0]}
                   </span>
                   {user.profileImg ? (
-                    <img
-                      src={user.profileImg}
-                      alt="Profile"
-                      className="w-8 h-8 rounded-full object-cover border-2 border-[#FACC15]"
-                    />
+                    <div className="relative">
+                      <img
+                        src={user.profileImg}
+                        alt="Profile"
+                        className="w-8 h-8 rounded-full object-cover border-2 border-[#FACC15]"
+                      />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0F172A] rounded-full"></span>
+                    </div>
                   ) : (
-                    <div className="w-8 h-8 bg-[#FACC15] rounded-full flex items-center justify-center text-black font-bold">
-                      {user.fullName[0]}
+                    <div className="relative">
+                      <div className="w-8 h-8 bg-[#FACC15] rounded-full flex items-center justify-center text-black font-bold">
+                        {user.fullName[0]}
+                      </div>
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#0F172A] rounded-full"></span>
                     </div>
                   )}
                 </div>

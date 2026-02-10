@@ -28,6 +28,7 @@ const ManageUsers = () => {
     const styles = {
       approved: "bg-green-500/10 text-green-500",
       banned: "bg-red-500/10 text-red-500",
+      rejected: "bg-orange-500/10 text-orange-500",
       pending: "bg-yellow-500/10 text-yellow-500",
     };
     return styles[status] || "bg-gray-500/10 text-gray-500";
@@ -127,7 +128,9 @@ const ManageUsers = () => {
                             : "bg-purple-500/10 text-purple-500"
                         }`}
                       >
-                        {user.role === USER_ROLES.DRIVER ? "🚗 سائق" : "🧍‍♂️ راكب"}
+                        {user.role === USER_ROLES.DRIVER
+                          ? "🚗 سائق"
+                          : "🧍‍♂️ راكب"}
                       </span>
                     </td>
                     <td className="p-6 text-center">
@@ -138,7 +141,10 @@ const ManageUsers = () => {
                       >
                         {user.accountStatus === ACCOUNT_STATUS.APPROVED
                           ? "نشط ✅"
-                          : user.accountStatus === ACCOUNT_STATUS.BANNED && "محظور 🚫"}
+                          : user.accountStatus === ACCOUNT_STATUS.BANNED
+                            ? "محظور 🚫"
+                            : user.accountStatus === ACCOUNT_STATUS.REJECTED &&
+                              "مرفوض ❌"}
                       </span>
                     </td>
                     <td className="p-6 text-center text-sm text-gray-400">
@@ -201,7 +207,8 @@ const ManageUsers = () => {
                         ? "نشط 🟢"
                         : user.accountStatus === ACCOUNT_STATUS.BANNED
                           ? "🔴 محظور"
-                          : user.accountStatus === ACCOUNT_STATUS.PENDING && "قيد المعالجة"}
+                          : user.accountStatus === ACCOUNT_STATUS.PENDING &&
+                            "قيد المعالجة"}
                     </span>
                     <span
                       className={`px-2 py-1 rounded-full text-[10px] font-black ${
@@ -234,7 +241,8 @@ const ManageUsers = () => {
                         user._id,
                         user.accountStatus === ACCOUNT_STATUS.APPROVED
                           ? ACCOUNT_STATUS.BANNED
-                          : user.accountStatus === ACCOUNT_STATUS.BANNED && ACCOUNT_STATUS.APPROVED,
+                          : user.accountStatus === ACCOUNT_STATUS.BANNED &&
+                              ACCOUNT_STATUS.APPROVED,
                       )
                     }
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${

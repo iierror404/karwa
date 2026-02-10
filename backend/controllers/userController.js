@@ -71,3 +71,38 @@ export const getUserById = async (req, res) => {
     res.status(500).send("خطأ في السيرفر");
   }
 };
+// 5. كتم الإشعارات لليوزر 🔔🔕
+export const muteNotifications = async (req, res) => {
+  const { duration } = req.body; // بالدقائق، أو "permanent"
+  let muteUntil = null;
+  let isMutedPermanently = false;
+
+  try {
+    if (duration === "permanent") {
+      isMutedPermanently = true;
+    } else if (duration > 0) {
+      muteUntil = new Date(Date.now() + duration * 60 * 1000);
+    } else {
+      // إلغاء الكتم
+      muteUntil = null;
+      isMutedPermanently = false;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { muteNotificationsUntil: muteUntil, isMutedPermanently } },
+      { new: true },
+    ).select("-password");
+
+    res.json({
+      msg:
+        duration === 0
+          ? "تم تفعيل الإشعارات بنجاح ✅"
+          : "تم كتم الإشعارات بنجاح 🔕",
+      user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "خلل في كتم الإشعارات ❌" });
+  }
+};

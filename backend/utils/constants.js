@@ -27,6 +27,8 @@ export const BOOKING_STATUS = {
   PENDING: "pending", // قيد الانتظار ⏳
   ACCEPTED: "accepted", // تم القبول ✅
   REJECTED: "rejected", // مرفوض ❌
+  CANCELLED: "cancelled", // ملغى من الراكب 🚫
+  EXPELLED: "expelled", // مطرود من السائق ⛔
 };
 
 // ============================================

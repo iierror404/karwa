@@ -2,6 +2,7 @@ import { createContext, useState, useContext, useEffect } from "react";
 import api from "../api/axios";
 import { toast } from "react-hot-toast";
 import { useAuth } from "./AuthContext";
+import { useSocket } from "./SocketContext";
 
 const BookingContext = createContext();
 
@@ -9,9 +10,13 @@ export const BookingProvider = ({ children }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { socket } = useSocket();
+
+  const userId = user?.id || user?._id;
 
   // جلب الطلبات من الباك-أند 📥
   const fetchBookings = async () => {
+    if (!userId) return;
     try {
       setLoading(true);
       const res = await api.get("/bookings/driver");
@@ -40,10 +45,27 @@ export const BookingProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    if (user) {
-      fetchBookings();
-    }
-  }, []);
+    fetchBookings();
+  }, [userId]);
+
+  // 🔔 استماع للحجوزات الجديدة لحظياً
+  useEffect(() => {
+    if (!socket || !userId) return;
+
+    const eventName = `new_booking_notification_${userId}`;
+
+    const handleNewBooking = (data) => {
+      console.log("🆕 Real-time booking received in Context:", data);
+      // إضافة الحجز الجديد لبداية القائمة
+      setBookings((prev) => [data.booking, ...prev]);
+    };
+
+    socket.on(eventName, handleNewBooking);
+
+    return () => {
+      socket.off(eventName, handleNewBooking);
+    };
+  }, [socket, userId]);
 
   return (
     <BookingContext.Provider

@@ -17,10 +17,8 @@ export const initSocket = (server) => {
     transports: ["websocket", "polling"],
   });
 
-  // تخزين المستخدمين المتصلين: userId -> socketId
-  // نستخدم Map لسرعة الوصول
-  // لكن المتغير global في هذا الملف فقط، اذا سيرفرك يسوي restart يضيعون
-  // للمشاريع الكبيرة نستخدم Redis. هنا Map كافية.
+  // تخزين المستخدمين المتصلين: userId -> Set of socketIds (لعلاج مشكلة عدة أجهزة)
+  const onlineUsers = new Map();
 
   io.on("connection", (socket) => {
     console.log(`⚡ متصل جديد: ${socket.id} 🔌`);
@@ -30,18 +28,22 @@ export const initSocket = (server) => {
       if (userId) {
         // انضمام لغرفة الاشعارات الخاصة به
         socket.join(`user_${userId}`);
+        socket.userId = userId;
 
-        // تحديث حالة الاتصال
-        // يمكن للمستخدم ان يكون متصل من عدة اجهزة، لذا القيمة ممكن تكون Set او Array
-        // للتبسيط الان: كل يوزر عنده سوكيت واحد نشط (الاخير)
-        // او نخزن sockedId بداخل الـ user room وخلاص؟
-        // لا، نحتاج قائمة Online Users عشان الفرونت يعرض النقطة الخضراء
+        // تحديث قائمة المتصلين
+        if (!onlineUsers.has(userId)) {
+          onlineUsers.set(userId, new Set());
+          // نبعث للكل ان هذا المستخدم صار اونلاين (فقط المرة الأولى)
+          io.emit("user_status_change", { userId, status: "online" });
+        }
+        onlineUsers.get(userId).add(socket.id);
 
-        socket.userId = userId; // تخزين الـ ID في السوكيت نفسه للمغادرة
+        // إرسال قائمة المتصلين الحالية للمستخدم الجديد فقط
+        socket.emit("online_users_list", Array.from(onlineUsers.keys()));
 
-        // نبعث للكل ان هذا المستخدم صار اونلاين
-        io.emit("user_status_change", { userId, status: "online" });
-        console.log(`✅ User Registered: ${userId}`);
+        console.log(
+          `✅ User Registered: ${userId} (Total Online: ${onlineUsers.size})`,
+        );
       }
     });
 
@@ -51,20 +53,28 @@ export const initSocket = (server) => {
       console.log(`👥 دخل للغرفة: ${roomId}`);
     });
 
-    // مغادرة الغرفة (مهمة جداً للأداء)
+    // مغادرة الغرفة
     socket.on("leave_room", (roomId) => {
       socket.leave(roomId);
       console.log(`🚶 غادر الغرفة: ${roomId}`);
     });
 
     socket.on("disconnect", () => {
-      console.log("❌ قطع الاتصال");
-      if (socket.userId) {
-        io.emit("user_status_change", {
-          userId: socket.userId,
-          status: "offline",
-        });
+      if (socket.userId && onlineUsers.has(socket.userId)) {
+        const userSockets = onlineUsers.get(socket.userId);
+        userSockets.delete(socket.id);
+
+        if (userSockets.size === 0) {
+          onlineUsers.delete(socket.userId);
+          // نبلغ الكل ان اليوزر صار اوفلاين
+          io.emit("user_status_change", {
+            userId: socket.userId,
+            status: "offline",
+          });
+          console.log(`❌ User Offline: ${socket.userId}`);
+        }
       }
+      console.log(`❌ قطع الاتصال: ${socket.id}`);
     });
   });
 

@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import { useAppContext } from "../context/AppContext";
 
 const GlobalMessageListener = () => {
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { activeChat } = useAppContext();
 
   useEffect(() => {
     if (!socket || !user) return;
@@ -15,8 +17,23 @@ const GlobalMessageListener = () => {
     console.log(`🔔 Joining personal notification room: user_${user.id}`);
 
     const handleNotification = (data) => {
-      // اذا المستخدم فاتح نفس الشات حالياً، ممكن منطلع اشعار (اختياري)
-      // لكن كبداية، نطلع اشعار بكل الاحوال
+      // 🕵️ التحقق مما إذا كان المستخدم يفتح نفس الشات حالياً
+      if (activeChat) {
+        const isSameRoute = data.routeId === activeChat.routeId;
+        const isSameType = data.chatType === activeChat.chatType;
+
+        // في الشات الخاص، نتأكد ان المرسل هو نفسه الشخص اللي بالشات
+        let isSamePerson = true;
+        if (data.chatType === "private" && activeChat.otherParticipantId) {
+          isSamePerson = data.senderId === activeChat.otherParticipantId;
+        }
+
+        if (isSameRoute && isSameType && isSamePerson) {
+          console.log("🚫 Suppressing notification for active chat");
+          return; // لا تظهر الإشعار
+        }
+      }
+
       console.log("New Notification Recieved:", data);
 
       toast(

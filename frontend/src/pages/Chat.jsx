@@ -21,8 +21,9 @@ import {
   UI_COLORS,
   ERROR_MESSAGES,
   USER_ROLES,
-  SOCKET_EVENTS
+  SOCKET_EVENTS,
 } from "../constants/constants";
+import { useAppContext } from "../context/AppContext";
 
 // 🎨 Animation Variants
 const containerVariants = {
@@ -56,6 +57,7 @@ const Chat = () => {
   // ملاحظة: الراكب دائماً "تفاوض" الا اذا دخل للجروب العام (ميزة مستقبلية)
   const { user } = useAuth();
   const { socket, onlineUsers } = useSocket(); // 🟢 سحبنا قائمة المتصلين
+  const { setActiveChat } = useAppContext();
 
   const chatType = searchParams.get("type") || CHAT_TYPES.PRIVATE; // private | group
 
@@ -65,6 +67,8 @@ const Chat = () => {
   const [routeData, setRouteData] = useState(null); // معلومات الخط
   const [otherUser, setOtherUser] = useState(null); // معلومات الطرف الثاني (السايق او الراكب)
   const [loading, setLoading] = useState(true);
+
+  const [inMyRoute, setInMyRoute] = useState(false);
 
   const messagesEndRef = useRef(null); // للنزول لآخر رسالة
 
@@ -78,10 +82,27 @@ const Chat = () => {
       try {
         setLoading(true);
 
+        const isbook = await api.get("/bookings/my-bookings"); // جلب حجوزاتي
+
         // 1. جلب تفاصيل الخط أولاً
         const routeRes = await api.get(`/routes/${routeId}`);
         const route = routeRes.data;
         setRouteData(route);
+
+        // 2. التحقق من وجود حجز لهذا الخط (مع فحص آمن)
+        const bookings = isbook?.data?.bookings || [];
+        const myBooking = bookings.find(
+          (booking) =>
+            booking?.routeId?._id === routeId || booking?.routeId === routeId,
+        );
+
+        if (myBooking) {
+          setInMyRoute(true);
+        } else {
+          setInMyRoute(false);
+        }
+
+        console.log("inMyRoute ", myBooking ? true : false);
 
         // 2. تحديد الطرف الثاني 👤
         let targetId = null;
@@ -135,6 +156,17 @@ const Chat = () => {
           );
           setMessages(historyRes.data.data);
 
+          // 4. تحديث الرسائل كمقروءة ✅
+          if (chatType === CHAT_TYPES.PRIVATE) {
+            try {
+              await api.put(API_ENDPOINTS.CHAT.MARK_AS_READ(routeId), null, {
+                params: { otherUserId: targetId },
+              });
+            } catch (readErr) {
+              console.error("Failed to mark messages as read", readErr);
+            }
+          }
+
           // تحسين: استنتاج اسم الراكب من الرسائل
           if (
             chatType === CHAT_TYPES.PRIVATE &&
@@ -150,6 +182,13 @@ const Chat = () => {
             }
           }
         }
+
+        // 🎯 تعيين الدردشة النشطة لمنع الاشعارات المزعجة
+        setActiveChat({
+          routeId,
+          chatType,
+          otherParticipantId: targetId,
+        });
       } catch (err) {
         console.error(err);
         toast.error(ERROR_MESSAGES.CHAT_LOAD_FAILED);
@@ -161,6 +200,11 @@ const Chat = () => {
     if (user && routeId) {
       initChat();
     }
+
+    // تنظيف عند الخروج من الصفحة
+    return () => {
+      setActiveChat(null);
+    };
   }, [routeId, chatType, passengerIdParam, user]);
 
   // --- 🔌 2. الانضمام للغرفة (منفصل لضمان وجود السوكيت) ---
@@ -207,6 +251,18 @@ const Chat = () => {
       console.log("New Message Received:", msg);
       setMessages((prev) => [...prev, msg]);
       scrollToBottom();
+
+      // إذا كنت أنا المستلم، أحدث الحالة لمقروءة تلقائياً ✅
+      const currentUserId = (user.id || user._id)?.toString();
+      const receiverId = (msg?.receiver?._id || msg?.receiver)?.toString();
+
+      if (receiverId === currentUserId && chatType === CHAT_TYPES.PRIVATE) {
+        api
+          .put(API_ENDPOINTS.CHAT.MARK_AS_READ(routeId), null, {
+            params: { otherUserId: (msg.sender._id || msg.sender)?.toString() },
+          })
+          .catch((e) => console.error("Failed to mark new msg as read", e));
+      }
     };
 
     socket.on(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
@@ -233,7 +289,9 @@ const Chat = () => {
       let receiverId = null;
       if (chatType === CHAT_TYPES.PRIVATE) {
         receiverId =
-          user.role === USER_ROLES.PASSENGER ? routeData.driverId?._id : otherUser?._id;
+          user.role === USER_ROLES.PASSENGER
+            ? routeData.driverId?._id
+            : otherUser?._id;
       }
 
       // ارسال للباك اند
@@ -244,12 +302,37 @@ const Chat = () => {
         receiverId, // مهم جداً للاشعارات والغرف الخاصة
       });
 
+      console.log("\n\n SENDED MSG RES: ", res.data);
+
       // ملاحظة: ماكو داعي نضيف الرسالة يدوياً هنا، لأن السوكيت رح يرجعها النا (new_message)
 
       setNewMessage("");
     } catch (err) {
       console.error(err);
+      toast.dismiss();
       toast.error(ERROR_MESSAGES.CHAT_SEND_FAILED);
+    }
+  };
+
+  // --- 🎫 4. طلب حجز مقعد ---
+  const handleBookingRequest = async () => {
+    try {
+      toast.dismiss();
+      setLoading(true);
+      const res = await api.post("/bookings/request", {
+        routeId: routeId,
+        message: "طلب حجز مقعد من الشات",
+      });
+
+      if (res.data.success) {
+        toast.success("تم إرسال طلب الحجز بنجاح! ✅");
+        setInMyRoute(true); // تحديث الحالة محلياً
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.msg || "فشل إرسال طلب الحجز");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -284,18 +367,15 @@ const Chat = () => {
                 className="w-12 h-12 rounded-full object-cover border-2 border-[#FACC15]/20 shadow-md"
                 alt="User"
               />
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1E293B]"></div>
+              {otherUser?._id &&
+                (onlineUsers?.includes(otherUser._id) ||
+                  onlineUsers?.includes(otherUser.id)) && (
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-[#1E293B]"></div>
+                )}
             </div>
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 {otherUser?.fullName || "جاري التحميل..."}
-                {/* 🟢 مؤشر الاتصال */}
-                {otherUser?._id && onlineUsers.includes(otherUser._id) && (
-                  <span
-                    className="w-2.5 h-2.5 bg-green-500 rounded-full border border-[#1E293B] animate-pulse"
-                    title="متصل الآن"
-                  ></span>
-                )}
               </h2>
               <p className="text-xs text-gray-400">
                 {chatType === CHAT_TYPES.GROUP
@@ -318,14 +398,17 @@ const Chat = () => {
 
         <div className="flex gap-2 text-gray-400 items-center">
           {/* زر حجز المقعد (يظهر فقط للركاب وفي الشات الخاص) 🎫 */}
-          {user.role === USER_ROLES.PASSENGER && chatType === CHAT_TYPES.PRIVATE && (
-            <button
-              onClick={() => navigate(`/book/${routeId}`)} // توجيه لصفحة الحجز (أو كود الحجز)
-              className="bg-[#FACC15] text-black px-4 py-2 rounded-xl font-bold text-sm hover:scale-105 transition-transform shadow-[0_0_10px_rgba(250,204,21,0.4)] animate-pulse"
-            >
-              احجز مقعدك 🎫
-            </button>
-          )}
+          {user.role === USER_ROLES.PASSENGER &&
+            chatType === CHAT_TYPES.PRIVATE &&
+            !inMyRoute && (
+              <button
+                onClick={handleBookingRequest}
+                disabled={loading}
+                className="bg-[#FACC15] text-black px-4 py-2 rounded-xl font-bold text-sm hover:scale-105 transition-transform shadow-[0_0_10px_rgba(250,204,21,0.4)] animate-pulse disabled:opacity-50"
+              >
+                {loading ? "جاري الحجز..." : "احجز مقعدك 🎫"}
+              </button>
+            )}
 
           {otherUser?.phone && (
             <a
@@ -358,21 +441,23 @@ const Chat = () => {
           >
             {messages.map((msg, index) => {
               // 🛠️ إصلاح: توحيد الايدي كنصوص للمقارنة
-              const currentUserId = (user.id || user._id).toString();
-              const senderId = (msg.sender._id || msg.sender).toString();
+              const currentUserId = (user.id || user._id)?.toString();
+              const senderId = (msg?.sender?._id || msg?.sender)?.toString();
               const isMe = senderId === currentUserId;
 
               return (
                 <motion.div
                   key={index}
                   variants={messageVariants}
+                  initial="hidden"
+                  animate="visible"
                   className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
                 >
                   {!isMe && (
                     <img
                       src={
-                        msg.sender.profileImg ||
-                        getAvatarUrl(msg.sender.fullName || "User", "random")
+                        msg?.sender?.profileImg ||
+                        getAvatarUrl(msg?.sender?.fullName || "User", "random")
                       }
                       className="w-8 h-8 rounded-full object-cover mb-1 opacity-70"
                     />
@@ -389,7 +474,7 @@ const Chat = () => {
                         `}
                   >
                     <p className="text-sm font-medium leading-relaxed">
-                      {msg.content}
+                      {msg?.content}
                     </p>
                     <span
                       className={`text-[10px] block mt-1 opacity-60 ${isMe ? "text-right" : "text-left"}`}
