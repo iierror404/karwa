@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext"; // نسحب بيانات اليوزر 📦
+import { USER_ROLES } from "../constants/constants";
 
 const Home = () => {
   const { user } = useAuth(); // نشوف اليوزر مسجل دخول لو لا
@@ -41,10 +42,10 @@ const Home = () => {
           {user && (
             <>
               <Link
-                to={user.role === "driver" ? "/driver/dashboard" : "/search"}
+                to={user.role === USER_ROLES.DRIVER ? "/driver/dashboard" : "/search"}
                 className="px-8 py-4 bg-[#FACC15] text-black rounded-2xl font-black text-lg hover:scale-105 transition-transform"
               >
-                {user.role === "driver"
+                {user.role === USER_ROLES.DRIVER
                   ? "انتقل إلى لوحة تحكم السائق"
                   : "ابحث عن خط"}
               </Link>

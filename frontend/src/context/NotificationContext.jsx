@@ -1,0 +1,70 @@
+import { createContext, useContext, useState, useEffect } from "react";
+import { useSocket } from "./SocketContext";
+import { useAuth } from "./AuthContext";
+import api from "../api/axios";
+
+const NotificationContext = createContext();
+
+export const useNotifications = () => useContext(NotificationContext);
+
+export const NotificationProvider = ({ children }) => {
+  const { socket } = useSocket();
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // جلب الاشعارات الغير مقروءة عند التحميل (اذا اكو API)
+  // حالياً حنعتمد على اللي يجي من السوكيت واللوكال ستيت
+
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleNewMessage = (data) => {
+      console.log("🔔 New Message Notification:", data);
+
+      // اضافة الاشعار للقائمة
+      setNotifications((prev) => [data, ...prev]);
+      setUnreadCount((prev) => prev + 1);
+
+      // تشغيل صوت اشعار
+      new Audio("/sounds/notification.mp3").play().catch(() => {});
+    };
+
+    const handleBookingUpdate = (data) => {
+      console.log("🔔 Booking Update:", data);
+      setNotifications((prev) => [
+        {
+          type: "booking",
+          title:
+            data.status === "accepted" ? "تم قبول الحجز ✅" : "تم رفض الحجز ❌",
+          body: data.msg,
+          time: new Date(),
+          id: Date.now(),
+        },
+        ...prev,
+      ]);
+      setUnreadCount((prev) => prev + 1);
+    };
+
+    socket.on("message_notification", handleNewMessage);
+    socket.on(`booking_status_updated_${user._id}`, handleBookingUpdate);
+
+    return () => {
+      socket.off("message_notification", handleNewMessage);
+      socket.off(`booking_status_updated_${user._id}`, handleBookingUpdate);
+    };
+  }, [socket, user]);
+
+  const markAllAsRead = () => {
+    setUnreadCount(0);
+    // ممكن هنا ندز ريكويست للباك اند نصفر الاشعارات
+  };
+
+  return (
+    <NotificationContext.Provider
+      value={{ notifications, unreadCount, markAllAsRead }}
+    >
+      {children}
+    </NotificationContext.Provider>
+  );
+};

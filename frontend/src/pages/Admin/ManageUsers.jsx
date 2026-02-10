@@ -13,6 +13,7 @@ import {
   PersonStanding,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { USER_ROLES, ACCOUNT_STATUS } from "../../constants/constants";
 
 const ManageUsers = () => {
   const { users, fetchUsers, loading, toggleUserStatus } = useAdmin();
@@ -121,12 +122,12 @@ const ManageUsers = () => {
                     >
                       <span
                         className={`px-4 py-1.5 rounded-full text-xs font-black ${
-                          user.role === "driver"
+                          user.role === USER_ROLES.DRIVER
                             ? "bg-yellow-500/10 text-yellow-500"
                             : "bg-purple-500/10 text-purple-500"
                         }`}
                       >
-                        {user.role === "driver" ? "🚗 سائق" : "🧍‍♂️ راكب"}
+                        {user.role === USER_ROLES.DRIVER ? "🚗 سائق" : "🧍‍♂️ راكب"}
                       </span>
                     </td>
                     <td className="p-6 text-center">
@@ -135,9 +136,9 @@ const ManageUsers = () => {
                           user.accountStatus,
                         )}`}
                       >
-                        {user.accountStatus === "approved"
+                        {user.accountStatus === ACCOUNT_STATUS.APPROVED
                           ? "نشط ✅"
-                          : user.accountStatus === "banned" && "محظور 🚫"}
+                          : user.accountStatus === ACCOUNT_STATUS.BANNED && "محظور 🚫"}
                       </span>
                     </td>
                     <td className="p-6 text-center text-sm text-gray-400">
@@ -149,17 +150,17 @@ const ManageUsers = () => {
                           onClick={() =>
                             toggleUserStatus(
                               user._id,
-                              user.accountStatus === "approved"
-                                ? "banned"
-                                : "approved",
+                              user.accountStatus === ACCOUNT_STATUS.APPROVED
+                                ? ACCOUNT_STATUS.BANNED
+                                : ACCOUNT_STATUS.APPROVED,
                             )
                           }
-                          className={`p-2 cursor-pointer rounded-xl transition-all ${user.accountStatus === "approved" ? "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white"}`}
+                          className={`p-2 cursor-pointer rounded-xl transition-all ${user.accountStatus === ACCOUNT_STATUS.APPROVED ? "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white" : "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white"}`}
                         >
-                          {user.accountStatus === "approved" ? (
+                          {user.accountStatus === ACCOUNT_STATUS.APPROVED ? (
                             <UserX size={18} />
                           ) : (
-                            user.accountStatus === "banned" && (
+                            user.accountStatus === ACCOUNT_STATUS.BANNED && (
                               <UserCheck size={18} />
                             )
                           )}
@@ -196,20 +197,20 @@ const ManageUsers = () => {
                     <span
                       className={`px-3 py-1 rounded-full text-[10px] font-black ${getStatusStyles(user.accountStatus)}`}
                     >
-                      {user.accountStatus === "approved"
+                      {user.accountStatus === ACCOUNT_STATUS.APPROVED
                         ? "نشط 🟢"
-                        : user.accountStatus === "banned"
+                        : user.accountStatus === ACCOUNT_STATUS.BANNED
                           ? "🔴 محظور"
-                          : user.accountStatus === "pending" && "قيد المعالجة"}
+                          : user.accountStatus === ACCOUNT_STATUS.PENDING && "قيد المعالجة"}
                     </span>
                     <span
                       className={`px-2 py-1 rounded-full text-[10px] font-black ${
-                        user.role === "driver"
+                        user.role === USER_ROLES.DRIVER
                           ? "bg-yellow-500/10 text-yellow-500"
                           : "bg-purple-500/10 text-purple-500"
                       }`}
                     >
-                      {user.role === "driver" ? (
+                      {user.role === USER_ROLES.DRIVER ? (
                         <span className="flex items-center justify-center gap-0.5">
                           سائق <Car size={14} />
                         </span>
@@ -231,23 +232,23 @@ const ManageUsers = () => {
                     onClick={() =>
                       toggleUserStatus(
                         user._id,
-                        user.accountStatus === "approved"
-                          ? "banned"
-                          : user.accountStatus === "banned" && "approved",
+                        user.accountStatus === ACCOUNT_STATUS.APPROVED
+                          ? ACCOUNT_STATUS.BANNED
+                          : user.accountStatus === ACCOUNT_STATUS.BANNED && ACCOUNT_STATUS.APPROVED,
                       )
                     }
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${
-                      user.accountStatus === "approved"
+                      user.accountStatus === ACCOUNT_STATUS.APPROVED
                         ? "bg-red-500/10 text-red-500"
                         : "bg-green-500/10 text-green-500"
                     }`}
                   >
-                    {user.accountStatus === "approved" ? (
+                    {user.accountStatus === ACCOUNT_STATUS.APPROVED ? (
                       <>
                         <UserX size={14} /> حظر الحساب
                       </>
                     ) : (
-                      user.accountStatus === "banned" && (
+                      user.accountStatus === ACCOUNT_STATUS.BANNED && (
                         <>
                           <UserCheck size={14} /> تفعيل
                         </>

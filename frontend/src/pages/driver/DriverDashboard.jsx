@@ -6,20 +6,14 @@ import {
   Car,
   User,
   Plus,
-  Navigation,
-  Loader2,
-  Bell,
-  AlertCircle,
-  Check,
-  X,
   Menu,
   Users,
   LogOut,
   ChevronLeft,
-  SquareCheckBigIcon,
   XCircle,
   AlertTriangle,
   LogOutIcon,
+  MessageCircle,
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
@@ -31,6 +25,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useAppContext } from "../../context/AppContext";
 import { useRoutes } from "../../context/RouteContext";
 import DriverBookings from "./components/DriverBookings";
+import ManageRoute from "./components/ManageRoute";
+import DriverNotifications from "../../components/DriverNotifications";
 
 const DriverDashboard = () => {
   // 1. استخدام الكونتيكست بدل الـ Local States 🔄
@@ -41,10 +37,7 @@ const DriverDashboard = () => {
   // 2. الـ States الخاصة بالداشبورد فقط 📊
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [acceptedBookings, setAcceptedBookings] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [notifLoading, setNotifLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const navigate = useNavigate();
@@ -60,43 +53,29 @@ const DriverDashboard = () => {
     }
   };
 
-  // --- 📩 دالة جلب طلبات الحجز (الإشعارات) ---
-  const fetchNotifications = async () => {
+  // --- 📩 دالة جلب الركاب المقبولين فقط ---
+  const fetchAcceptedBookings = async () => {
     try {
-      setNotifLoading(true);
       const res = await api.get("/bookings/driver");
-
-      // الطلبات الجديدة (بانتظار الموافقة) 🔔
-      const pending = res.data.bookings.filter((b) => b.status === "pending");
-      setNotifications(pending);
 
       // الركاب المثبتين (المقبولين) ✅
       const accepted = res.data.bookings.filter((b) => b.status === "accepted");
       setAcceptedBookings(accepted);
     } catch (err) {
       console.error("خطأ بجلب البيانات:", err);
-    } finally {
-      setNotifLoading(false);
     }
   };
 
-  // --- ✅ دالة القبول أو الرفض ---
-  const handleBookingAction = async (id, status) => {
+  const [conversations, setConversations] = useState([]);
+
+  // --- 💬 جلب المحادثات (الإنبوكس) ---
+  const fetchConversations = async () => {
     try {
-      await api.patch(`/bookings/status/${id}`, { status });
-
-      if (status === "accepted") {
-        toast.success("تم قبول الراكب بنجاح! ✅");
-      } else {
-        toast.error("تم رفض الطلب ❌");
-      }
-
-      // تحديث فوري للقوائم
-      setNotifications((prev) => prev.filter((n) => n._id !== id));
-      fetchNotifications(); // إعادة جلب للتأكد من المزامنة
-      refreshRoutes(); // تحديث المقاعد المتاحة في الكونتيكست
+      const res = await api.get("/chat/conversations");
+      console.log("Conversations: \n", res.data)
+      setConversations(res.data.data);
     } catch (err) {
-      toast.error("فشلت العملية، جرب مرة ثانية 🔥");
+      console.error("Failed to fetch conversations", err);
     }
   };
 
@@ -105,7 +84,11 @@ const DriverDashboard = () => {
       try {
         setLoading(true);
         // جلب كل البيانات سوية
-        await Promise.all([refreshRoutes(), fetchNotifications()]);
+        await Promise.all([
+          refreshRoutes(),
+          fetchAcceptedBookings(),
+          fetchConversations(),
+        ]);
       } catch (err) {
         toast.error("فشل جلب البيانات! 📶");
       } finally {
@@ -117,8 +100,8 @@ const DriverDashboard = () => {
 
     initData();
 
-    // تحديث تلقائي كل دقيقة
-    const interval = setInterval(fetchNotifications, 60000);
+    // تحديث تلقائي كل دقيقة لقائمة الركاب
+    const interval = setInterval(fetchAcceptedBookings, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -148,17 +131,9 @@ const DriverDashboard = () => {
         </div>
 
         <div className="relative font-cairo">
-          {/* الجرس */}
+          {/* الجرس ومكون الإشعارات */}
           {user.status === "approved" ? (
-            <div
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="bg-[#1E293B] p-3 rounded-2xl border border-gray-700 relative cursor-pointer hover:border-[#FACC15] transition-all"
-            >
-              <Bell size={24} className="text-[#FACC15]" />
-              {notifications.length > 0 && (
-                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-[#1E293B] animate-pulse"></span>
-              )}
-            </div>
+            <DriverNotifications />
           ) : (
             <button
               onClick={logout}
@@ -168,86 +143,6 @@ const DriverDashboard = () => {
               <LogOutIcon size={20} />
             </button>
           )}
-
-          {/* صندوق الإشعارات */}
-          {showNotifications && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowNotifications(false)}
-              ></div>
-
-              <div className="absolute left-0 mt-4 w-80 md:w-[400px] bg-[#1E293B] border-2 border-gray-700 rounded-[2rem] shadow-2xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-5 duration-200">
-                <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-[#1e293b]">
-                  <h3 className="font-black text-white text-sm">
-                    طلبات الحجز الجديدة 📩
-                  </h3>
-                  <span className="bg-red-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    {notifications.length}
-                  </span>
-                </div>
-
-                <div className="max-h-[400px] overflow-y-auto bg-[#1e293b]">
-                  {notifLoading && notifications.length === 0 ? (
-                    <div className="p-6 text-center">
-                      <Loader2 className="animate-spin mx-auto text-[#FACC15]" />
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="p-10 text-center text-gray-500 text-xs font-bold">
-                      لا توجد طلبات جديدة حالياً.. 🧊
-                    </div>
-                  ) : (
-                    notifications.map((notif) => (
-                      <div
-                        key={notif._id}
-                        className="p-4 border-b border-gray-800/50 hover:bg-[#0F172A]/40 transition-all"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FACC15] to-orange-500 flex items-center justify-center text-[#0F172A] font-black shrink-0">
-                            <User size={20} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <h4 className="text-sm font-bold text-white truncate">
-                                {notif.passengerId?.fullName || "راكب مجهول"}
-                              </h4>
-                              <span className="text-[10px] text-[#FACC15] font-mono">
-                                {notif.routeId?.price} د.ع
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[#94A3B8] mt-1 mb-3">
-                              يريد حجز مقعد في خط:{" "}
-                              <span className="text-gray-300 font-bold">
-                                {notif.routeId?.fromArea}
-                              </span>
-                            </p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() =>
-                                  handleBookingAction(notif._id, "accepted")
-                                }
-                                className="flex-1 bg-green-600 hover:bg-green-500 text-white text-[11px] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1 shadow-lg shadow-green-900/20"
-                              >
-                                <Check size={14} /> قبول
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleBookingAction(notif._id, "rejected")
-                                }
-                                className="flex-1 bg-gray-800 text-red-500 hover:bg-red-500 hover:text-white text-[11px] font-bold py-2 rounded-xl transition-all border border-red-500/20"
-                              >
-                                <X size={14} /> رفض
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
@@ -256,7 +151,7 @@ const DriverDashboard = () => {
           {loading ? (
             /* --- حالة التحميل 🔃 --- */
             <div className="flex flex-col items-center justify-center h-64 space-y-4">
-              <Loader2 className="animate-spin text-[#FACC15]" size={40} />
+              {/* <Loader2 className="animate-spin text-[#FACC15]" size={40} /> */}
               <p className="text-[#94A3B8] animate-pulse font-bold">
                 جاري جلب بياناتك... 🔃
               </p>
@@ -386,12 +281,26 @@ const DriverDashboard = () => {
                             <p className="font-bold text-sm">{route.toArea}</p>
                           </div>
                         </div>
-                        <div className="bg-[#1E293B] p-3 rounded-xl text-center border border-gray-700 min-w-[80px]">
-                          <Clock
-                            size={16}
-                            className="mx-auto mb-1 text-[#FACC15]"
-                          />
-                          <p className="text-xs font-black">{route.time}</p>
+                        <div className="flex flex-col gap-2">
+                          <div className="bg-[#1E293B] p-3 rounded-xl text-center border border-gray-700 min-w-[80px]">
+                            <Clock
+                              size={16}
+                              className="mx-auto mb-1 text-[#FACC15]"
+                            />
+                            <p className="text-xs font-black">{route.time}</p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              navigate(`/chat/${route._id}?type=group`)
+                            }
+                            title="فتح شات الخط"
+                            className="bg-[#FACC15]/10 hover:bg-[#FACC15] text-[#FACC15] hover:text-black p-3 rounded-xl transition-all border border-[#FACC15]/20"
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <LogOutIcon size={16} className="rotate-180" />
+                              {/* استخدمت ايقونة مؤقتة لأن MessageCircle ممستوردة، رح استوردها هسة */}
+                            </div>
+                          </button>
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
@@ -566,6 +475,80 @@ const DriverDashboard = () => {
       )}
 
       {activeTab === "bookings" && <DriverBookings />}
+      {activeTab === "manageRoute" && <ManageRoute />}
+
+      {/* --- تبويب الرسائل (Inbox) 📨 --- */}
+      {activeTab === "messages" && (
+        <div className="p-4 md:p-10 bg-[#1E293B] rounded-3xl shadow-2xl border border-gray-800">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-bold text-white mb-2">
+                الرسائل الواردة 💬
+              </h2>
+              <p className="text-gray-400 text-xs">استفسارات ومفاوضات الركاب</p>
+            </div>
+            <button
+              onClick={fetchConversations}
+              className="p-2 bg-[#0F172A] rounded-xl hover:bg-gray-700 transition-colors"
+            >
+              <Clock size={16} className="text-[#FACC15]" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {conversations.length > 0 ? (
+              conversations.map((conv, idx) => (
+                <div
+                  key={idx}
+                  onClick={() =>
+                    navigate(
+                      `/chat/${conv._id.route}?type=private&passengerId=${conv._id.otherPerson}`,
+                    )
+                  }
+                  className="bg-[#0F172A]/50 p-4 rounded-2xl border border-gray-800 hover:border-[#FACC15]/30 cursor-pointer transition-all hover:bg-[#0F172A]"
+                >
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={
+                        conv.otherPerson?.profileImg ||
+                        `https://ui-avatars.com/api/?name=${conv.otherPerson?.fullName}&background=FACC15&color=000`
+                      }
+                      className="w-12 h-12 rounded-full object-cover border border-gray-700"
+                      alt="passenger"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <h4 className="font-bold text-white text-sm">
+                          {conv.otherPerson?.fullName}
+                        </h4>
+                        <span className="text-[10px] text-gray-500">
+                          {new Date(
+                            conv.lastMessage.createdAt,
+                          ).toLocaleDateString("en-GB")}
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-xs truncate dir-rtl text-right">
+                        {conv.lastMessage.sender === user._id ? "أنت: " : ""}
+                        {conv.lastMessage.content}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-[10px] text-[#FACC15]">
+                        <div className="bg-[#FACC15]/10 px-2 py-0.5 rounded-md">
+                          خط: {conv.route.fromArea} ⬅ {conv.route.toArea}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10 text-gray-500">
+                <MessageCircle size={40} className="mx-auto mb-2 opacity-20" />
+                <p>لا توجد رسائل جديدة 📭</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* الـ Modal الخاص بإضافة خط */}
       <AddRouteModal

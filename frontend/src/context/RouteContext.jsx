@@ -9,8 +9,9 @@ export const RouteProvider = ({ children }) => {
 
   const fetchRoutes = async () => {
     try {
-      const res = await api.get("/routes");
+      const res = await api.get("/routes/my-routes");
       setRoutes(res.data);
+      console.log(res.data)
     } catch (err) {
       console.error("Error fetching routes 🛑", err);
     }

@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -24,4 +25,12 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    host: "0.0.0.0",
+    port: 3000,
+    strictPort: true,
+    hmr: {
+      host: "192.168.0.192"
+    }
+  }
 });

@@ -8,23 +8,28 @@ import { BookingProvider } from "./context/BookingContext.jsx";
 import { AppProvider } from "./context/AppContext.jsx";
 import { BrowserRouter } from "react-router-dom";
 import { AdminProvider } from "./context/AdminContext.jsx";
+import { SocketProvider } from "./context/SocketContext.jsx";
+import { NotificationProvider } from "./context/NotificationContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <AuthProvider>
-      <AdminProvider>
-        {/* 👈 ضيفه هنا، حتى الأدمين يقدر يوصل لبيانات الـ Auth إذا احتاج */}
-        <RouteProvider>
-          <BookingProvider>
-            <AppProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
-            </AppProvider>
-          </BookingProvider>
-        </RouteProvider>
-      </AdminProvider>
+      <SocketProvider>
+        <AdminProvider>
+          {/* 👈 ضيفه هنا، حتى الأدمين يقدر يوصل لبيانات الـ Auth إذا احتاج */}
+          <RouteProvider>
+            <BookingProvider>
+              <AppProvider>
+                <NotificationProvider>
+                  <BrowserRouter>
+                    <App />
+                  </BrowserRouter>
+                </NotificationProvider>
+              </AppProvider>
+            </BookingProvider>
+          </RouteProvider>
+        </AdminProvider>
+      </SocketProvider>
     </AuthProvider>
   </StrictMode>,
 );
-

@@ -5,11 +5,14 @@ import {
   Phone,
   CheckCircle,
   XCircle,
+  MessageCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const PassengerListDetails = ({ routeId, allBookings }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
 
   // 1. فلترة الركاب مع التأكد من وجود البيانات
   const passengers = useMemo(() => {
@@ -123,6 +126,19 @@ const PassengerListDetails = ({ routeId, allBookings }) => {
                         </span>
                       )}
                     </div>
+
+                    {/* زر الشات الخاص مع الراكب */}
+                    <button
+                      onClick={() =>
+                        navigate(
+                          `/chat/${routeId}?type=private&passengerId=${booking.passengerId._id}`,
+                        )
+                      }
+                      className="ml-auto bg-[#FACC15]/10 hover:bg-[#FACC15] text-[#FACC15] hover:text-black p-2 rounded-xl transition-all border border-[#FACC15]/20"
+                      title="مراسلة الراكب"
+                    >
+                      <MessageCircle size={16} />
+                    </button>
 
                     <div className="flex items-center gap-1 text-[#94A3B8] mb-2">
                       <Phone size={10} />

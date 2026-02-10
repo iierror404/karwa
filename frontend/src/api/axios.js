@@ -1,8 +1,11 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
+
 const api = axios.create({
-  baseURL: "http://192.168.0.196:4000/api",
+  baseURL: `${BACKEND_URL}:${BACKEND_PORT}/api`,
   withCredentials: true,
 });
 

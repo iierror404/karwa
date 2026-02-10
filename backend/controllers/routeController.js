@@ -54,9 +54,13 @@ export const searchRouteController = async (req, res) => {
   try {
     const { province, fromArea, toArea } = req.query;
 
-    let filter = { isActive: true };
+    // 🏗️ الهيكل الجديد للفلترة
+    let filter = {
+      "routeStatus.status": "active", // نطلع بس الخطوط النشطة ✅
+      "routeStatus.isDriverAvilable": true, // والسايق لازم يكون متوفر 🚐
+    };
 
-    // 💡 الأفضل نستخدم Regex حتى للمحافظة، لأن اليوزر ممكن يكتب "واسط" أو "واسط " (بفراغ)
+    // 💡 استخدام Regex للبحث المرن مع إزالة الفراغات
     if (province) {
       filter.province = { $regex: province.trim(), $options: "i" };
     }
@@ -69,29 +73,28 @@ export const searchRouteController = async (req, res) => {
       filter.toArea = { $regex: toArea.trim(), $options: "i" };
     }
 
-    // 🏎️ الترتيب مهم: نجيب أحدث الخطوط المضافة أولاً
+    // 🏎️ تنفيذ الاستعلام مع الـ Populate والترتيب
     const routes = await Route.find(filter)
-      .populate("driverId", "fullName phone profileImg")
+      .populate("driverId", "fullName phone profileImg carDetails") // ضفت carDetails تفيدك بالبحث
       .sort({
-        // 1. نكدر نرتب حسب الحالات النشطة أولاً
-        isActive: -1,
-        // 2. نرتب حسب الأحدث حتى يطلع الشغل الجديد أول واحد
-        createdAt: -1,
+        createdAt: -1, // الأحدث أولاً 🆕
       });
 
-    // إذا ماكو نتائج، رجع مصفوفة فارغة بس بوضع "نجاح"
+    // الرد على الفرونت أند
     res.status(200).json({
       success: true,
       results: routes.length,
       data: routes,
     });
 
-    console.log(`🔎 عملية بحث جديدة: ${province || "كل المحافظات"} 🚐`);
+    console.log(
+      `🔎 بحث جديد في ${province || "كل المناطق"} - النتائج: ${routes.length} 🚐✨`,
+    );
   } catch (error) {
-    console.log("search route error: \n", error);
+    console.log("❌ Search Route Error: \n", error);
     res.status(500).json({
       success: false,
-      msg: "خطأ في عملية البحث! 🔍",
+      msg: "صار خلل بالبحث، حاول مرة ثانية! 🔍",
       error: error.message,
     });
   }
@@ -121,7 +124,7 @@ export const getMyRoutesController = async (req, res) => {
  */
 export const updateRouteStatus = async (req, res) => {
   try {
-    const { routeId, newStatus, noteMessage, isAvailable } = req.body;
+    const { routeId, newStatus, noteMessage, isDriverAvilable } = req.body;
 
     // 1. التحديث لازم يستهدف الحقول داخل routeStatus 🎯
     const updatedRoute = await Route.findByIdAndUpdate(
@@ -130,10 +133,11 @@ export const updateRouteStatus = async (req, res) => {
         $set: {
           "routeStatus.status": newStatus,
           "routeStatus.noteMessage": noteMessage || "",
-          "routeStatus.isDriverAvailable": isAvailable !== undefined ? isAvailable : true
-        }
+          "routeStatus.isDriverAvailable":
+            isDriverAvilable !== undefined ? isDriverAvilable : true,
+        },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedRoute) {
@@ -142,11 +146,11 @@ export const updateRouteStatus = async (req, res) => {
 
     // 2. إرسال التحديث بالـ Socket ⚡
     const io = getIO();
-    io.emit("route_status_updated", { 
-      routeId: updatedRoute._id, 
+    io.emit("route_status_updated", {
+      routeId: updatedRoute._id,
       newStatus: updatedRoute.routeStatus.status,
       noteMessage: updatedRoute.routeStatus.noteMessage,
-      isDriverAvailable: updatedRoute.routeStatus.isDriverAvailable
+      isDriverAvailable: updatedRoute.routeStatus.isDriverAvilable,
     });
 
     res.status(200).json({
@@ -155,10 +159,31 @@ export const updateRouteStatus = async (req, res) => {
       updatedRoute,
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: "صار خلل بتحديث الحالة 🤦‍♂️", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "صار خلل بتحديث الحالة 🤦‍♂️",
+      error: error.message,
     });
+    console.log(error);
+  }
+};
+/**
+ * @desc    جلب تفاصيل خط معين (مفيد للشات وغيره)
+ * @route   GET /api/routes/:id
+ */
+export const getRouteByIdController = async (req, res) => {
+  try {
+    const route = await Route.findById(req.params.id).populate(
+      "driverId",
+      "fullName phone profileImg carDetails",
+    );
+
+    if (!route) {
+      return res.status(404).json({ msg: "الخط غير موجود 🤷‍♂️" });
+    }
+
+    res.json(route);
+  } catch (error) {
+    res.status(500).json({ msg: "فشل جلب تفاصيل الخط 💥" });
   }
 };

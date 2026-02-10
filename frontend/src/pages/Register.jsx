@@ -5,10 +5,11 @@ import FileInputCustom from "../components/FileInputCustom";
 import { Loader2, LogIn } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom"; // 👈 استخدمنا useNavigate للتوجيه
 import { useAuth } from "../context/AuthContext";
+import { USER_ROLES } from "../constants/constants";
 
 const Register = () => {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState("passenger");
+  const [role, setRole] = useState(USER_ROLES.PASSENGER);
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
@@ -74,7 +75,7 @@ const Register = () => {
     data.append("role", role);
 
     // 2. التحقق من مستندات السائق 🪪
-    if (role === "driver") {
+    if (role === USER_ROLES.DRIVER) {
       const {
         nationalCardFront,
         nationalCardBack,
@@ -113,10 +114,10 @@ const Register = () => {
       login(userData);
 
       toast.success(
-        `أهلاً بيك يا ${role === "driver" ? "سايقنا" : "راكبنا"} الجديد! 🎉`,
+        `أهلاً بيك يا ${role === USER_ROLES.DRIVER ? "سايقنا" : "راكبنا"} الجديد! 🎉`,
       );
 
-      if (userData.role === "driver") {
+      if (userData.role === USER_ROLES.DRIVER) {
         navigate("/driver/dashboard");
       } else {
         navigate("/search");
@@ -133,7 +134,7 @@ const Register = () => {
   };
 
   const calculateProgress = () => {
-    if (role !== "driver") return 0;
+    if (role !== USER_ROLES.DRIVER) return 0;
     const fields = [
       formData.fullName,
       formData.phone,
@@ -160,9 +161,9 @@ const Register = () => {
         <div className="flex flex-row-reverse bg-dark-bg p-1 rounded-2xl mb-8 border border-gray-800">
           <button
             type="button"
-            onClick={() => setRole("passenger")}
+            onClick={() => setRole(USER_ROLES.PASSENGER)}
             className={`cursor-pointer flex-1 py-3 rounded-xl transition-all ${
-              role === "passenger"
+              role === USER_ROLES.PASSENGER
                 ? "bg-primary text-black font-bold"
                 : "text-secondary"
             }`}
@@ -171,9 +172,9 @@ const Register = () => {
           </button>
           <button
             type="button"
-            onClick={() => setRole("driver")}
+            onClick={() => setRole(USER_ROLES.DRIVER)}
             className={`cursor-pointer flex-1 py-3 rounded-xl transition-all ${
-              role === "driver"
+              role === USER_ROLES.DRIVER
                 ? "bg-primary text-black font-bold"
                 : "text-secondary"
             }`}
@@ -183,7 +184,7 @@ const Register = () => {
         </div>
 
         <h2 className="text-2xl font-bold text-center mb-6 text-primary">
-          إنشاء حساب {role === "driver" ? "سائق كروة" : "راكب جديد"}
+          إنشاء حساب {role === USER_ROLES.DRIVER ? "سائق كروة" : "راكب جديد"}
         </h2>
 
         <form onSubmit={handleRegister} className="space-y-4">
@@ -207,7 +208,7 @@ const Register = () => {
             required
           />
 
-          {role === "driver" && (
+          {role === USER_ROLES.DRIVER && (
             <>
               <h4 className="text-xs font-bold text-primary text-center mb-2">
                 {progress}%

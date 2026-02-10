@@ -9,17 +9,20 @@ import {
   Car,
   AlertCircle,
   Loader2,
+  MessageCircle,
 } from "lucide-react";
 import api from "../api/axios";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const PassengerHome = () => {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false); // لمعرفة إذا تم البحث أول مرة
   const [userBookings, setUserBookings] = useState([]);
-  const {user} = useAuth();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   // بيانات البحث
   const [searchTerm, setSearchTerm] = useState({
@@ -61,6 +64,7 @@ const PassengerHome = () => {
       // التعديل هنا ليتناسب مع الـ Controller مالتك (data هو اسم المصفوفة)
       setRoutes(res.data.data);
       setHasSearched(true);
+      console.log(res.data);
 
       if (res.data.data.length === 0) {
         toast("مالقينا خط حالياً بهذا المسار.. جرب غير منطقة", { icon: "😕" });
@@ -84,7 +88,6 @@ const PassengerHome = () => {
   };
 
   const handleBooking = async (route) => {
-
     // 1. حماية: إذا مو مسجل دخول
     if (!user) {
       return toast.error("عذرا, يجيب ان تسجل حساب اولأ", {
@@ -147,9 +150,7 @@ const PassengerHome = () => {
           الخط فول (مكتمل) 🈵
         </button>
       );
-    }
-
-    else if (alreadyBooked) {
+    } else if (alreadyBooked) {
       return (
         <button
           disabled
@@ -161,17 +162,16 @@ const PassengerHome = () => {
     } else {
       return (
         <button
-          onClick={() => handleBooking(route)}
-          className="flex-[3] bg-[#FACC15] text-black font-black py-4 rounded-2xl"
+          onClick={() => navigate(`/chat/${route._id}?type=private`)}
+          className="flex-[3] bg-[#FACC15] text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-lg"
         >
-          حجز مقعد 💺
+          <MessageCircle size={20} /> تفاوض / حجز
         </button>
       );
     }
   };
 
   useEffect(() => {
-
     if (user) {
       fetchUserBookings();
     } else {
@@ -186,6 +186,7 @@ const PassengerHome = () => {
     >
       {/* --- العنوان الرئيسي --- */}
       <div className="text-center mb-12 mt-6">
+
         <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
           بحث عن{" "}
           <span className="text-[#FACC15] drop-shadow-[0_0_15px_rgba(250,204,21,0.4)]">

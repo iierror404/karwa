@@ -10,10 +10,11 @@ export const requestBookingController = async (req, res) => {
   try {
     const { routeId, message } = req.body;
 
-    if (!routeId) return res.status(400).json({
-      success: false,
-      msg: "يجب ارسال معرف الخط، يرجى اعادة المحاولة"
-    });
+    if (!routeId)
+      return res.status(400).json({
+        success: false,
+        msg: "يجب ارسال معرف الخط، يرجى اعادة المحاولة",
+      });
 
     const route = await Route.findById(routeId);
     if (!route) return res.status(404).json({ msg: "الخط غير موجود! ❌" });
@@ -39,12 +40,13 @@ export const requestBookingController = async (req, res) => {
     const io = getIO();
     io.emit(`new_booking_notification_${route.driverId}`, {
       msg: `وصلك طلب حجز جديد من ${req.user.fullName} 🎫`,
-      booking: populatedBooking
+      booking: populatedBooking,
     });
 
     res.status(201).json({ success: true, booking: populatedBooking });
-    console.log(`📩 طلب حجز جديد لخط: ${route.fromArea} من الراكب: ${req.user.fullName} 🚗`);
-    
+    console.log(
+      `📩 طلب حجز جديد لخط: ${route.fromArea} من الراكب: ${req.user.fullName} 🚗`,
+    );
   } catch (error) {
     console.log("RequestBookingController Error: \n", error);
     res.status(500).json({ msg: "فشل إرسال الطلب! 🔥" });
@@ -65,7 +67,9 @@ export const updateBookingStatusController = async (req, res) => {
 
     // التأكد إن اللي جاي يحدث هو السايق صاحب الخط
     if (booking.driverId.toString() !== req.user.id) {
-      return res.status(403).json({ msg: "غير مسموح لك بتغيير حالة هذا الحجز! ✋" });
+      return res
+        .status(403)
+        .json({ msg: "غير مسموح لك بتغيير حالة هذا الحجز! ✋" });
     }
 
     if (status === "accepted" && booking.status !== "accepted") {
@@ -74,7 +78,9 @@ export const updateBookingStatusController = async (req, res) => {
         route.avilableSeats -= 1;
         await route.save();
       } else {
-        return res.status(400).json({ msg: 'لا توجد مقاعد كافية للموافقة! ⚠️' });
+        return res
+          .status(400)
+          .json({ msg: "لا توجد مقاعد كافية للموافقة! ⚠️" });
       }
     }
 
@@ -86,18 +92,20 @@ export const updateBookingStatusController = async (req, res) => {
     io.emit(`booking_status_updated_${booking.passengerId}`, {
       bookingId: booking._id,
       status: status,
-      msg: status === 'accepted' ? 'تم قبول حجزك بنجاح! ✅' : 'نعتذر، تم رفض طلب الحجز. ❌'
+      msg:
+        status === "accepted"
+          ? "تم قبول حجزك بنجاح! ✅"
+          : "نعتذر، تم رفض طلب الحجز. ❌",
     });
 
-    res.json({ 
-      success: true, 
-      msg: `تم ${status === 'accepted' ? 'قبول' : 'رفض'} الحجز بنجاح ✅`, 
-      booking 
+    res.json({
+      success: true,
+      msg: `تم ${status === "accepted" ? "قبول" : "رفض"} الحجز بنجاح ✅`,
+      booking,
     });
-
   } catch (error) {
-    console.log("error in update booking status controller: \n", error)
-    res.status(500).json({ msg: 'فشل تحديث الحالة! 🔥' });
+    console.log("error in update booking status controller: \n", error);
+    res.status(500).json({ msg: "فشل تحديث الحالة! 🔥" });
   }
 };
 
@@ -125,7 +133,10 @@ export const getDriverBookingsController = async (req, res) => {
 export const getPassengerBookingsController = async (req, res) => {
   try {
     const bookings = await Booking.find({ passengerId: req.user.id })
-      .populate("routeId", "fromArea toArea province price")
+      .populate(
+        "routeId",
+        "fromArea toArea province price carType carNumber time",
+      )
       .populate("driverId", "fullName phone profileImg") // ضفتلك تفاصيل السيارة هنا 🏎️
       .sort({ createdAt: -1 });
 

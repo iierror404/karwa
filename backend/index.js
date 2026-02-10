@@ -12,17 +12,23 @@ import routesRoute from "./routes/routeRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import cookieParser from "cookie-parser";
+import chatRoutes from "./routes/chatRoutes.js";
 
 dotenv.config();
 const port = process.env.PORT || 4000;
 const app = express();
 const host = "0.0.0.0";
 
+const FRONTEND_IP = process.env.FRONTEND_URL
+const FRONTEND_PORT = process.env.FRONTEND_PORT
+
+const FRONTEND_URL = FRONTEND_IP + ":" + FRONTEND_PORT;
+
 app.use(
   cors({
     // 1. لازم تحدد رابط الفرونت أند بالضبط (بدون / بالنهاية)
     // إذا جنت تفتحه من المتصفح بـ localhost:3000 أو بالـ IP
-    origin: ["http://localhost:3000", "http://192.168.0.196:3000"],
+    origin: ["http://localhost:3000", FRONTEND_URL],
 
     // 2. هاي هي أهم وحدة للكوكي 🍪
     credentials: true,
@@ -60,6 +66,8 @@ app.use("/api/routes", routesRoute);
 app.use("/api/bookings", bookingRoutes);
 
 app.use("/api/user", userRoutes);
+
+app.use("/api/chat", chatRoutes);
 
 // * Server Init
 ConnectToDb();

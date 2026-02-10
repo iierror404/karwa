@@ -57,3 +57,17 @@ export const deleteUserAccount = async (req, res) => {
     res.status(500).send("خطأ أثناء الحذف ❌");
   }
 };
+
+// 4. جلب معلومات مستخدم معين (لأغراض الشات والملف العام)
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "المستخدم غير موجود" });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("خطأ في السيرفر");
+  }
+};

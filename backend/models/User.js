@@ -1,5 +1,11 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import {
+  USER_ROLES,
+  ACCOUNT_STATUS,
+  VALIDATION,
+  DEFAULT_VALUES,
+} from "../utils/constants.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -13,35 +19,31 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       // Regex يتحقق يبدأ بـ 07 وبعده (7 أو 8 أو 5) وبعده 8 أرقام
-      match: [
-        /^07[785]\d{8}$/,
-        "الرجاء إدخال رقم عراقي صحيح (آسيا، زين، كورك) 🇮🇶",
-      ],
-      minlength: [11, "رقم الهاتف العراقي لازم 11 رقم 📏"],
-      maxlength: [11, "رقم الهاتف العراقي لازم 11 رقم 📏"],
+      match: [VALIDATION.PHONE_REGEX, VALIDATION.PHONE_ERROR_MESSAGE],
+      minlength: [VALIDATION.PHONE_LENGTH, VALIDATION.PHONE_LENGTH_ERROR],
+      maxlength: [VALIDATION.PHONE_LENGTH, VALIDATION.PHONE_LENGTH_ERROR],
     },
     password: {
       type: String,
       required: true,
-      minlength: 8,
+      minlength: DEFAULT_VALUES.PASSWORD_MIN_LENGTH,
     },
     role: {
       // Admin, Driver, Passenger
       type: String,
-      enum: ["passenger", "driver", "admin"],
+      enum: Object.values(USER_ROLES),
       required: true,
-      default: "passenger",
+      default: USER_ROLES.PASSENGER,
     },
     accountStatus: {
       type: String,
       required: true,
-      enum: ["pending", "approved", "banned", "rejected"],
-      default: "pending",
+      enum: Object.values(ACCOUNT_STATUS),
+      default: ACCOUNT_STATUS.PENDING,
     },
     profileImg: {
       type: String,
-      default:
-        "https://static.vecteezy.com/system/resources/previews/068/404/150/large_2x/minimalist-user-grey-avatar-icon-silhouette-for-profile-picture-website-app-ui-ux-placeholder-account-identification-or-contact-graphic-resource-free-vector.jpg", // صورة مؤقتة
+      default: DEFAULT_VALUES.PROFILE_IMAGE,
     },
     documents: {
       // اذا كان سائق
@@ -51,6 +53,7 @@ const userSchema = new mongoose.Schema(
       residencyCardBack: { type: String, default: "" },
     },
     message: {
+      // رسالة من الادمن للسائق عند الرفض او القبول او الحظر
       type: String,
     },
     createdAt: {
@@ -63,9 +66,9 @@ const userSchema = new mongoose.Schema(
 
 userSchema.pre("save", async function () {
   // إذا الباسورد ممتغير، اخرج من الدالة فوراً
-  if (!this.isModified("password")) return; 
+  if (!this.isModified("password")) return;
 
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(DEFAULT_VALUES.BCRYPT_SALT_ROUNDS);
   this.password = await bcrypt.hash(this.password, salt);
   // ماكو داعي نكتب next() هنا بمود الـ async
 });

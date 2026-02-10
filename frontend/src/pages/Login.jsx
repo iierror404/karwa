@@ -5,6 +5,8 @@ import api from "../api/axios";
 import { Link, useNavigate } from "react-router-dom"; // 👈 غيرنا Navigate إلى useNavigate
 import { useAuth } from "../context/AuthContext";
 
+import { USER_ROLES } from "../constants/constants";
+
 const Login = () => {
   const [formData, setFormData] = useState({ phone: "", password: "" });
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ const Login = () => {
 
         // 3. الـ Navigation لازم يصير فوراً بدون ما ننتظر setLoading
         // الـ setLoading(false) راح تصير بالـ finally أصلاً
-        if (userData.role === "driver") {
+        if (userData.role === USER_ROLES.DRIVER) {
           navigate("/driver/dashboard", { replace: true }); // replace تخلي المستخدم ما يگدر يرجع للـ login بـ Back
         } else {
           navigate("/search", { replace: true });

@@ -1,4 +1,12 @@
-import { User, Car, Navigation, HousePlus, Home } from "lucide-react";
+import {
+  User,
+  Car,
+  Navigation,
+  HousePlus,
+  Home,
+  Settings,
+  MessageSquare,
+} from "lucide-react";
 import { useAppContext } from "../../../context/AppContext";
 import { Link } from "react-router-dom";
 
@@ -11,7 +19,13 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       icon: <Navigation size={20} />,
     },
     { id: "passengers", label: "الركاب", icon: <User size={20} /> },
+    { id: "messages", label: "الرسائل", icon: <MessageSquare size={20} /> },
     { id: "bookings", label: "طلبات الحجز", icon: <HousePlus size={20} /> },
+    {
+      id: "manageRoute",
+      label: "إدارة الخط",
+      icon: <Settings size={20} />, // أو أي أيقونة تعجبك
+    },
     { id: "settings", label: "الإعدادات", icon: <Car size={20} /> },
   ];
   // 👈 سحبنا التحكم بالسايدبار من الكونتيكست العام
@@ -48,7 +62,10 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
               className={`cursor-pointer w-full flex items-center gap-4 ${item.id !== "home" && "px-4 py-4 flex items-center gap-4"} rounded-2xl font-bold transition-all ${activeTab === item.id ? "bg-[#FACC15] text-black shadow-lg" : "text-gray-400 hover:bg-[#0F172A] hover:text-white"}`}
             >
               {item.id === "home" ? (
-                <Link to="/" className="w-full px-4 py-4 flex items-center gap-4">
+                <Link
+                  to="/"
+                  className="w-full px-4 py-4 flex items-center gap-4"
+                >
                   {item.icon}
                   {item.label}
                 </Link>

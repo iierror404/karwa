@@ -24,18 +24,9 @@ export const ROUTE_STATUS = {
 };
 
 export const BOOKING_STATUS = {
-  PENDING: "pending", // قيد الانتظار ⏳
-  ACCEPTED: "accepted", // تم القبول ✅
-  REJECTED: "rejected", // مرفوض ❌
-};
-
-// ============================================
-// 💬 CHAT CONSTANTS
-// ============================================
-export const CHAT_MESSAGE_TYPES = {
-  TEXT: "TEXT", // رسالة عادية 💬
-  BOOKING_REQUEST: "REQUEST", // طلب حجز من داخل الشات 🎫
-  SYSTEM: "SYSTEM", // رسالة من النظام (مثل: السايق انطلق) 🤖
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
 };
 
 export const CHAT_TYPES = {
@@ -44,80 +35,74 @@ export const CHAT_TYPES = {
 };
 
 // ============================================
-// 🌐 API ROUTES
+// 🌐 API ENDPOINTS
 // ============================================
-export const API_ROUTES = {
+export const API_ENDPOINTS = {
   // Auth
   AUTH: {
-    BASE: "/api/auth",
-    REGISTER: "/api/auth/register",
-    LOGIN: "/api/auth/login",
-    USER_STATUS: "/api/auth/userStatus",
+    REGISTER: "/auth/register",
+    LOGIN: "/auth/login",
+    USER_STATUS: "/auth/userStatus",
   },
   // Admin
   ADMIN: {
-    BASE: "/api/admin",
-    PENDING_DRIVERS: "/api/admin/pending-drivers",
-    VERIFY_DRIVER: "/api/admin/verify-driver",
-    STATS: "/api/admin/stats",
-    TOGGLE_STATUS: "/api/admin/toggle-status",
-    USERS: "/api/admin/users",
+    PENDING_DRIVERS: "/admin/pending-drivers",
+    VERIFY_DRIVER: "/admin/verify-driver",
+    STATS: "/admin/stats",
+    TOGGLE_STATUS: "/admin/toggle-status",
+    USERS: "/admin/users",
   },
   // Routes
   ROUTES: {
-    BASE: "/api/routes",
-    ADD: "/api/routes/add",
-    SEARCH: "/api/routes/search",
-    MY_ROUTES: "/api/routes/my-routes",
-    UPDATE_STATUS: "/api/routes/updateRouteStatus",
-    BY_ID: "/api/routes/:id",
+    ADD: "/routes/add",
+    SEARCH: "/routes/search",
+    MY_ROUTES: "/routes/my-routes",
+    UPDATE_STATUS: "/routes/updateRouteStatus",
+    BY_ID: (id) => `/routes/${id}`,
   },
   // Bookings
   BOOKINGS: {
-    BASE: "/api/bookings",
-    REQUEST: "/api/bookings/request",
-    STATUS: "/api/bookings/status",
-    DRIVER: "/api/bookings/driver",
-    MY_BOOKINGS: "/api/bookings/my-bookings",
+    REQUEST: "/bookings/request",
+    STATUS: (id) => `/bookings/status/${id}`,
+    DRIVER: "/bookings/driver",
+    MY_BOOKINGS: "/bookings/my-bookings",
   },
   // User
   USER: {
-    BASE: "/api/user",
-    BY_ID: "/api/user/:id",
+    BY_ID: (id) => `/user/${id}`,
   },
   // Chat
   CHAT: {
-    BASE: "/api/chat",
-    SEND: "/api/chat/send",
-    CONVERSATIONS: "/api/chat/conversations",
-    MY_CONVERSATIONS: "/api/chat/my-conversations",
-    HISTORY: "/api/chat/history",
+    SEND: "/chat/send",
+    CONVERSATIONS: "/chat/conversations",
+    MY_CONVERSATIONS: "/chat/my-conversations",
+    HISTORY: (routeId) => `/chat/history/${routeId}`,
   },
 };
 
 // ============================================
-// 🔢 HTTP STATUS CODES
+// 🎨 UI CONSTANTS
 // ============================================
-export const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  INTERNAL_SERVER_ERROR: 500,
+export const UI_COLORS = {
+  PRIMARY: "#FACC15",
+  PRIMARY_DARK: "#eab308",
+  BACKGROUND: "#0F172A",
+  CARD_BG: "#1E293B",
+  TEXT_PRIMARY: "#FFFFFF",
+  TEXT_SECONDARY: "#9CA3AF",
+  BORDER: "#374151",
 };
 
-// ============================================
-// 🎨 DEFAULT VALUES
-// ============================================
-export const DEFAULT_VALUES = {
-  PROFILE_IMAGE:
+export const AVATAR_API_URL = "https://ui-avatars.com/api/";
+
+export const DEFAULT_IMAGES = {
+  PROFILE:
     "https://static.vecteezy.com/system/resources/previews/068/404/150/large_2x/minimalist-user-grey-avatar-icon-silhouette-for-profile-picture-website-app-ui-ux-placeholder-account-identification-or-contact-graphic-resource-free-vector.jpg",
-  BCRYPT_SALT_ROUNDS: 10,
-  PASSWORD_MIN_LENGTH: 8,
-  PHONE_LENGTH: 11,
+};
+
+// Helper function to generate avatar URL
+export const getAvatarUrl = (name, background = "random", color = "fff") => {
+  return `${AVATAR_API_URL}?name=${encodeURIComponent(name)}&background=${background}&color=${color}`;
 };
 
 // ============================================
@@ -126,7 +111,7 @@ export const DEFAULT_VALUES = {
 export const VALIDATION = {
   PHONE_REGEX: /^07[785]\d{8}$/,
   PHONE_ERROR_MESSAGE: "الرجاء إدخال رقم عراقي صحيح (آسيا، زين، كورك) 🇮🇶",
-  PHONE_LENGTH_ERROR: "رقم الهاتف العراقي لازم 11 رقم 📏",
+  PHONE_LENGTH: 11,
   PASSWORD_MIN_LENGTH: 8,
 };
 
@@ -157,6 +142,7 @@ export const ERROR_MESSAGES = {
 
   // Chat
   CHAT_SEND_FAILED: "فشل الإرسال ❌",
+  CHAT_LOAD_FAILED: "فشل تحميل المحادثة",
 };
 
 export const SUCCESS_MESSAGES = {
@@ -176,4 +162,18 @@ export const SUCCESS_MESSAGES = {
   // Admin
   DRIVER_VERIFIED: "تم التحقق من السائق ✅",
   STATUS_UPDATED: "تم تحديث الحالة ✅",
+};
+
+// ============================================
+// 🔔 SOCKET EVENTS
+// ============================================
+export const SOCKET_EVENTS = {
+  CONNECT: "connect",
+  DISCONNECT: "disconnect",
+  JOIN_ROOM: "join_room",
+  LEAVE_ROOM: "leave_room",
+  NEW_MESSAGE: "new_message",
+  NEW_BOOKING: "new_booking",
+  BOOKING_STATUS_UPDATE: "booking_status_update",
+  ROUTE_UPDATE: "route_update",
 };

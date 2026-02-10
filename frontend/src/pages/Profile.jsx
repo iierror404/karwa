@@ -14,6 +14,7 @@ import {
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { USER_ROLES } from "../constants/constants";
 
 const Profile = () => {
   const { user, setUser, logout } = useAuth(); // ضفنا logout هنا 🚪
@@ -194,7 +195,7 @@ const Profile = () => {
             />
             <ProfileField
               label="نوع الحساب"
-              value={user?.role === "driver" ? "سائق" : user?.role === "admin" ? "مسؤل" : "راكب"}
+              value={user?.role === USER_ROLES.DRIVER ? "سائق" : user?.role === USER_ROLES.ADMIN ? "مسؤل" : "راكب"}
               icon={<Shield size={18} />}
               isEditing={false}
             />
